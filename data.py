@@ -1,6 +1,8 @@
 import threading
 from typing import Dict, Tuple
 
+from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
+
 
 class Block:
     """
@@ -86,32 +88,76 @@ class BlockChain:
         self.__lock = threading.Lock()
 
     def contains(self, hashcode: str) -> bool:
+        """
+        Checks if there are Blocks in the BlockChain which match the given hash.
+        Method performs a thread safe action on the BlockChain by acquiring a lock.
+
+        :param hashcode: the hashcode to check
+        :return: if the file for the given hash is already stored in the BlockChain.
+        """
         with self.__lock:
             return self.__chain.__contains__(hashcode)
 
     def check(self, hashcode: str) -> bool:
+        """
+        Checks if the BlockChain is consistent up upon the given hash.
+        Method performs a thread safe action on the BlockChain by acquiring a lock.
+
+        :param hashcode: the hashcode to check
+        :return: if the whole BlockChain consistent from the given hash.
+        """
         with self.__lock:
+            # Checks if the hash is in the BlockChain at all
             if not self.__chain.__contains__(hashcode):
                 return False
+
+            # Fetching Blocks that represent the file of the hash
             blocks = self.__chain[hashcode]
             block = set(blocks.values()).pop()
+
+            # Check if all Blocks needed for the file are present
             if block.index_all != len(blocks):
                 return False
+
+            # Check the previous Block by checking the hash previous until
+            # the start of the chain is reached
             if block.hash_previous is not None:
                 return self.check(block.hash_previous)
             return True
 
     def add(self, block: Block) -> None:
+        """
+        Adds a new Block to the BlockChain.
+        Method performs a thread safe action on the BlockChain by acquiring a lock.
+
+        Creates a new section of Blocks for a new file or add a Block to an existing
+        Block sections in the BlockChain.
+
+        :param block: the block to insert into the BlockChain.
+        :raises BlockAlreadyExistsError: when a Block in the BlockChain already
+        exists when trying to add the new Block.
+        :raises BlockSectionAlreadyFullError: when a Block section of a file in the BlockChain
+        is already full when trying to add the new Block.
+        """
         with self.__lock:
             if self.__chain.__contains__(block.hash):
                 blocks = self.__chain.get(block.hash)
+
+                # if the block to insert into the BlockChain has the same ordinal
+                # as an existing block, the block already exists and an Error is raised
                 if blocks.__contains__(block.ordinal):
-                    raise ValueError("Block already exists!")
+                    raise BlockAlreadyExistsError("Block already exists!")
                 existing_block = set(blocks.values()).pop()
+
+                # if the block section for the file of the block hash given is already
+                # full or rather there are no more blocks needed to store the file and
+                # an Error is raised
                 if existing_block.index_all == len(blocks):
-                    raise ValueError("The Blocks stored under the given hash are already full!")
+                    raise BlockSectionAlreadyFullError("The block section is already full!")
                 blocks[block.ordinal] = block.init_with_previous(existing_block.hash_previous)
             else:
+                # if the file has yet no existing block, a new section of Blocks is inserted into
+                # the BlockChain and the hash_tail is updated
                 self.__chain[block.hash] = {
                     block.ordinal: block.init_with_previous(self.__hash_tail)
                 }
