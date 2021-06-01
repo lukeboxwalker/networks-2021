@@ -1,5 +1,5 @@
 import threading
-from typing import Dict, Tuple
+from typing import Dict, List
 
 from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
 
@@ -12,10 +12,17 @@ class Block:
     # Chunk size for the data a single Block is holding.
     CHUNK_SIZE = 500
 
-    def __init__(self, hashcode: str, index: Tuple[int, int], chunk: bytes, hash_previous=None):
+    def __init__(self,
+                 hashcode: str,
+                 index_all: int,
+                 ordinal: int,
+                 chunk: bytes,
+                 filename: str,
+                 hash_previous=None):
         self.__hashcode = hashcode
-        self.__index_all = index[0]
-        self.__ordinal = index[1]
+        self.__index_all = index_all
+        self.__ordinal = ordinal
+        self.__filename = filename
         self.__chunk = chunk
         self.__hash_previous = hash_previous
 
@@ -58,6 +65,14 @@ class Block:
         return self.__chunk
 
     @property
+    def filename(self) -> str:
+        """
+        Property function to ensure that the filename is a read only variable.
+        :return: the filename of the file as a string.
+        """
+        return self.__filename
+
+    @property
     def hash_previous(self) -> str:
         """
         Property function to ensure that the previous hash of a Block is a read only variable.
@@ -66,14 +81,14 @@ class Block:
         """
         return self.__hash_previous
 
-    def init_with_previous(self, hash_previous: str):
+    def init_with_previous(self, hashcode: str):
         """
-        Initializes a new Block with given previous hash of a previous Block. Because fields of
+        Initializes a new Block with given previous hashcode of a previous Block. Because fields of
         a Block should stay imputable. Therefore a new Block is created.
 
-        :return: a completely new Block object with the new given previous hash.
+        :return: a completely new Block object with the new given previous hashcode.
         """
-        return Block(self.hash, (self.index_all, self.ordinal), self.chunk, hash_previous)
+        return Block(self.hash, self.index_all, self.ordinal, self.chunk, self.filename, hashcode)
 
 
 class BlockChain:
@@ -131,7 +146,7 @@ class BlockChain:
         Method performs a thread safe action on the BlockChain by acquiring a lock.
 
         Creates a new section of Blocks for a new file or add a Block to an existing
-        Block sections in the BlockChain.
+        Block section in the BlockChain.
 
         :param block: the block to insert into the BlockChain.
         :raises BlockAlreadyExistsError: when a Block in the BlockChain already
@@ -162,3 +177,15 @@ class BlockChain:
                     block.ordinal: block.init_with_previous(self.__hash_tail)
                 }
                 self.__hash_tail = block.hash
+
+    def get(self, hashcode: str) -> List[Block]:
+        """
+        Gets the Blocks from the BlockChain with given hashcode.
+
+        :return: list of Blocks for the given file hash. List is empty if the hash does not exist.
+        """
+        with self.__lock:
+            if not self.__chain.__contains__(hashcode):
+                return []
+            blocks = self.__chain.get(hashcode)
+            return list(blocks.values())
