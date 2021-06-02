@@ -120,13 +120,14 @@ class BlockChain:
         :param hashcode: the hashcode to check
         :return: if the whole BlockChain consistent from the given hash.
         """
-        with self.__lock:
+
+        def check_hash(file_hash: str) -> bool:
             # Checks if the hash is in the BlockChain at all
-            if not self.__chain.contains(hashcode):
+            if not self.__chain.contains(file_hash):
                 return False
 
             # Fetching Blocks that represent the file of the hash
-            blocks = self.__chain.get(hashcode)
+            blocks = self.__chain.get(file_hash)
             block = set(blocks.values()).pop()
 
             # Check if all Blocks needed for the file are present
@@ -136,8 +137,11 @@ class BlockChain:
             # Check the previous Block by checking the hash previous until
             # the start of the chain is reached
             if block.hash_previous is not None:
-                return self.check(block.hash_previous)
+                return check_hash(block.hash_previous)
             return True
+
+        with self.__lock:
+            return check_hash(hashcode)
 
     def add(self, block: Block) -> None:
         """
@@ -193,41 +197,99 @@ class BlockChain:
 
 
 class FileDictionary:
+    """
+    Class that stores the BlockChain in the filesystem in a 'git like' way.
+
+    All Blocks of a file are stored in a single file. For example the
+    file hash: 4c19f36a2221b34b4837b05a72bbf21f1ca65d61aca1c221dd41e77979a08d73 is
+    resulting in a structure like:
+
+    /.blockchain
+    +-- ...
+        +-- ...
+    +-- /4c
+        +-- /19f36a2221b34b4837b05a72bbf21f1ca65d61aca1c221dd41e77979a08d73
+    +-- ...
+        +-- ...
+
+    The last Block added to the BLockChain is saved in a file 'head'. If there is no file called
+    'head' in the folder /.blockchain there is no data inside the BlockChain.
+    """
 
     def __init__(self):
-        self.root = os.getcwd() + "/BlockChain"
+        self.root = os.getcwd() + "/.blockchain"
+
+        # creating root dir if not exists
         if not path.exists(self.root):
             os.mkdir(self.root)
         self.head = self.root + "/head"
 
+    def __get_path(self, hashcode: str) -> str:
+        """
+        Construct the path for the given file hash.
+
+        :param hashcode: the hash value to get the path for.
+        :return: the path for the given file hash.
+        """
+        return self.root + "/" + hashcode[:2] + "/" + hashcode[2:]
+
+    def __create_dir_if_not_exists(self, hashcode: str):
+        """
+        Creates a directory for a given file hash if not already exists.
+
+        :param hashcode: the file hash
+        """
+        if not self.contains(hashcode):
+            os.mkdir(self.root + "/" + hashcode[:2])
+
     def get_head(self):
+        """
+        Reading the hash previous stored in the head file.
+
+        :return: the head or current 'hash previous', returns None if file does not exists.
+        """
         if not path.isfile(self.head):
             return None
         with open(self.head, "r") as f:
             return f.readline()
 
-    def update_head(self, head: str):
-        with open(self.head, "w") as f:
-            f.write(head)
+    def update_head(self, hashcode: str):
+        """
+        Updates the head to given hash.
 
-    def create_dir_if_not_exists(self, hashcode: str):
-        if not self.contains(hashcode):
-            os.mkdir(self.root + "/" + hashcode[:2])
+        :param hashcode: hash to update head with.
+        """
+        with open(self.head, "w") as f:
+            f.write(hashcode)
 
     def contains(self, hashcode: str) -> bool:
-        return path.isfile(self.root + "/" + hashcode[:2] + "/" + hashcode[2:])
+        """
+        Checks if the file path for the given hashcode exists.
 
-    def get_path(self, hashcode: str):
-        return self.root + "/" + hashcode[:2] + "/" + hashcode[2:]
+        :param hashcode: hash to check.
+        :return: if the hash is part of the BlockChain.
+        """
+        return path.isfile(self.__get_path(hashcode))
 
     def get(self, hashcode: str) -> Dict[int, Block]:
-        self.create_dir_if_not_exists(hashcode)
-        with open(self.get_path(hashcode), "rb") as f:
+        """
+        Loads all Blocks stored for the file hash.
+
+        :param hashcode: hashcode to load Blocks for.
+        :return: the Blocks saved under the given hashcode as a Dict. Where the key is
+        the ordinal of a block.
+        """
+        self.__create_dir_if_not_exists(hashcode)
+        with open(self.__get_path(hashcode), "rb") as f:
             return pickle.load(f)
 
     def set(self, hashcode: str, blocks: Dict[int, Block]):
-        self.create_dir_if_not_exists(hashcode)
-        with open(self.get_path(hashcode), "wb") as f:
+        """
+        Stored all given Blocks back to the file.
+
+        :param hashcode: to save Blocks under.
+        :param blocks: to save.
+        """
+        self.__create_dir_if_not_exists(hashcode)
+        with open(self.__get_path(hashcode), "wb") as f:
             pickle.dump(blocks, f)
-
-

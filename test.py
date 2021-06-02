@@ -11,11 +11,28 @@ if __name__ == '__main__':
 
     filepath = "web.py"
     name = os.path.split(filepath)
-    hashcode, blocks = create_blocks(load_file(filepath), name[1])
+    _, blocks = create_blocks(load_file(filepath), name[1])
 
     asyncio.run(client.send_blocks(blocks))
 
-    asyncio.run(client.check_hash(hashcode))
+    filepath = "data.py"
+    name = os.path.split(filepath)
+    _, blocks = create_blocks(load_file(filepath), name[1])
+
+    asyncio.run(client.send_blocks(blocks))
+
+    filepath = "handler.py"
+    name = os.path.split(filepath)
+    _, blocks = create_blocks(load_file(filepath), name[1])
+
+    asyncio.run(client.send_blocks(blocks))
+
+    filepath = "logger.py"
+    name = os.path.split(filepath)
+    _, blocks = create_blocks(load_file(filepath), name[1])
+
+    asyncio.run(client.send_blocks(blocks))
+
 
 
 
