@@ -4,41 +4,60 @@ import socket
 
 from asyncio import StreamReader, StreamWriter
 from typing import List, Dict, Callable
+
+import constant
+import handler
 from data import Block, BlockChain
-from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
 from logger import logger
 
-ENCODING = "utf-8"
 
-SEND_BLOCKS = b'1'
-CHECK_HASH = b'2'
+async def read(protocol: Dict[bytes, Callable], reader: StreamReader, writer: StreamWriter):
+    buffer = await reader.read()
+    protocol_id = buffer[:1]
+    if protocol.__contains__(protocol_id):
+        data_handler = protocol.get(protocol_id)
+        data = buffer[1:]
+
+        result = data_handler(data)
+        if result:
+            await send(constant.LOG_TEXT, result, writer)
+    else:
+        message = "Invalid protocol id: " + protocol_id.hex()
+        logger.warning(message)
+        await send(constant.LOG_TEXT, bytes(message, constant.ENCODING), writer)
 
 
 async def send(protocol_id: bytes, message: bytes, writer: StreamWriter):
-    data = bytearray()
-    data += protocol_id
-    data += message
-
-    writer.write(data)
+    writer.write(protocol_id + message)
     writer.write_eof()
     await writer.drain()
 
 
 class Client:
     def __init__(self, host: str, port: int):
+        logger.info("Connecting to server " + str(host) + ":" + str(port))
         self.host = host
         self.port = port
+        self.protocol: Dict[bytes, Callable[[bytes], None]] = {
+            constant.LOG_TEXT: handler.log,
+        }
 
     async def check_hash(self, hashcode: str):
         reader, writer = await asyncio.open_connection(self.host, self.port)
-        await send(CHECK_HASH, bytes(hashcode, ENCODING), writer)
+        await send(constant.CHECK_HASH, bytes(hashcode, constant.ENCODING), writer)
+
+        await read(self.protocol, reader, writer)
 
         writer.close()
         await writer.wait_closed()
 
     async def send_blocks(self, blocks: List[Block]):
         reader, writer = await asyncio.open_connection(self.host, self.port)
-        await send(SEND_BLOCKS, pickle.dumps(blocks), writer)
+
+        logger.info("Sending " + str(len(blocks)) + " Block(s) to the server")
+        await send(constant.SEND_BLOCKS, pickle.dumps(blocks), writer)
+
+        await read(self.protocol, reader, writer)
 
         writer.close()
         await writer.wait_closed()
@@ -49,52 +68,19 @@ class Server:
         self.host = host
         self.port = port
         self.block_chain = BlockChain()
-        self.protocol: Dict[bytes, Callable[[bytes], None]] = {
-            SEND_BLOCKS: self.receive_blocks,
-            CHECK_HASH: self.check_hash
+        self.protocol: Dict[bytes, Callable[[bytes], bytes]] = {
+            constant.SEND_BLOCKS: lambda data: handler.receive_blocks(self.block_chain, data),
+            constant.CHECK_HASH: lambda data: handler.check_hash(self.block_chain, data)
         }
 
     async def handle_client(self, reader: StreamReader, writer: StreamWriter):
         host, port = writer.get_extra_info("peername")
         logger.info("Incoming connection from: " + str(host) + ":" + str(port))
 
-        buffer = await reader.read()
-        protocol_id = buffer[:1]
-        if self.protocol.__contains__(protocol_id):
-            data_handler = self.protocol.get(protocol_id)
-            data = buffer[1:]
-            data_handler(data)
-        else:
-            logger.warning("Invalid protocol id: " + protocol_id.hex())
+        await read(self.protocol, reader, writer)
 
         writer.close()
         logger.info("Closed connection with: " + str(host) + ":" + str(port))
-
-    def check_hash(self, data: bytes):
-        hashcode = data.decode(ENCODING)
-        if not self.block_chain.contains(hashcode):
-            logger.warning("Invalid hash to check '" + hashcode + "' does not exist")
-            return
-
-        if self.block_chain.check(hashcode):
-            logger.info("Checking '" + hashcode + "' resolves in a consistent BlockChain")
-        else:
-            logger.error("Checking '" + hashcode + "' resolves in an inconsistent BlockChain")
-
-    def receive_blocks(self, data: bytes):
-        blocks: List[Block] = pickle.loads(data)
-        try:
-            for block in blocks:
-                self.block_chain.add(block)
-        except (BlockAlreadyExistsError, BlockSectionAlreadyFullError) as e:
-            logger.warning("Error while adding a Block to the BlockChain: " + str(e))
-            return
-
-        hashcode = blocks[0].hash
-        if self.block_chain.check(hashcode):
-            logger.info("Successfully added blocks to section '" + hashcode + "'")
-        else:
-            logger.error("Problem after adding to blocks section '" + hashcode + "'")
 
     async def start(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)

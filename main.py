@@ -1,8 +1,9 @@
 import asyncio
 import hashlib
-import os
 from typing import List, Tuple
-from data import Block, BlockChain
+
+from constant import CHUNK_SIZE
+from data import Block
 from web import Server
 
 
@@ -28,7 +29,7 @@ def load_file(filepath: str) -> List[bytes]:
     chunks: List[bytes] = []
     with open(filepath, "rb") as f:
         while True:
-            chunk = f.read(Block.CHUNK_SIZE)
+            chunk = f.read(CHUNK_SIZE)
             if not chunk:
                 break
             chunks.append(chunk)

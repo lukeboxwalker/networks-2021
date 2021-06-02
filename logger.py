@@ -1,4 +1,6 @@
 import logging
+from typing import Callable, Dict
+import constant
 
 
 class CustomFormatter(logging.Formatter):
@@ -15,11 +17,35 @@ class CustomFormatter(logging.Formatter):
         return self.colors[name] + logging.Formatter.format(self, record) + "\033[0m"
 
 
-logger = logging.getLogger("Application")
-logger.setLevel(logging.INFO)
+class Logger:
+    def __init__(self):
+        self.logger = logging.getLogger("Application")
+        self.logger.setLevel(logging.INFO)
 
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-console.setFormatter(CustomFormatter("%(asctime)s [%(levelname)-8s]  %(message)s"))
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        console.setFormatter(CustomFormatter("%(asctime)s [%(levelname)-8s]  %(message)s"))
 
-logger.addHandler(console)
+        self.logger.addHandler(console)
+
+        self.log_levels: Dict[bytes, Callable] = {
+            constant.INFO: self.logger.info,
+            constant.WARNING: self.logger.warning,
+            constant.ERROR: self.logger.error
+        }
+
+    def log(self, log_level: bytes, message: str):
+        if self.log_levels.__contains__(log_level):
+            self.log_levels.get(log_level)(message)
+
+    def info(self, message):
+        self.logger.info(message)
+
+    def warning(self, message):
+        self.logger.warning(message)
+
+    def error(self, message):
+        self.logger.error(message)
+
+
+logger = Logger()

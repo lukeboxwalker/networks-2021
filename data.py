@@ -8,9 +8,6 @@ class Block:
     Class that represents a Block in a BlockChain.
     """
 
-    # Chunk size for the data a single Block is holding.
-    CHUNK_SIZE = 500
-
     def __init__(self,
                  hashcode: str,
                  index_all: int,
