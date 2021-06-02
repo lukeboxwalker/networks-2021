@@ -1,7 +1,9 @@
+import asyncio
 import hashlib
 import os
 from typing import List, Tuple
 from data import Block, BlockChain
+from web import Server
 
 
 def create_blocks(chunks: List[bytes], filename: str) -> Tuple[str, List[Block]]:
@@ -34,13 +36,10 @@ def load_file(filepath: str) -> List[bytes]:
 
 
 if __name__ == '__main__':
-    filepath = "data.py"
-    name = os.path.split(filepath)
+    host = "localhost"
+    port = 10005
+    server = Server(host, port)
+    asyncio.run(server.start())
 
-    block_chain = BlockChain()
 
-    hashcode, blocks = create_blocks(load_file(filepath), name[1])
-    for block in blocks:
-        block_chain.add(block)
 
-    create_file_from_blocks(block_chain.get(hashcode))

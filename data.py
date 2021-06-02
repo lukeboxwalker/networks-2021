@@ -1,6 +1,5 @@
 import threading
 from typing import Dict, List
-
 from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
 
 
@@ -84,7 +83,7 @@ class Block:
     def init_with_previous(self, hashcode: str):
         """
         Initializes a new Block with given previous hashcode of a previous Block. Because fields of
-        a Block should stay imputable. Therefore a new Block is created.
+        a Block should stay immutable. Therefore a new Block is created.
 
         :return: a completely new Block object with the new given previous hashcode.
         """

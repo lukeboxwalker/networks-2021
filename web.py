@@ -1,101 +1,108 @@
+import asyncio
+import pickle
 import socket
-import threading
-from typing import Tuple, Callable
+
+from asyncio import StreamReader, StreamWriter
+from typing import List, Dict, Callable
+from data import Block, BlockChain
+from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
+from logger import logger
+
+ENCODING = "utf-8"
+
+SEND_BLOCKS = b'1'
+CHECK_HASH = b'2'
+
+
+async def send(protocol_id: bytes, message: bytes, writer: StreamWriter):
+    data = bytearray()
+    data += protocol_id
+    data += message
+
+    writer.write(data)
+    writer.write_eof()
+    await writer.drain()
 
 
 class Client:
-    def __init__(self, addr: Tuple[str, int]):
-        self.__socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        self.__socket.connect(addr)
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
 
-    def receive(self) -> str:
-        buf = self.__socket.recv(1024)
-        result = ""
-        while buf:
-            result += buf.decode("utf-8")
-            buf = self.__socket.recv(1024)
-        return result
+    async def check_hash(self, hashcode: str):
+        reader, writer = await asyncio.open_connection(self.host, self.port)
+        await send(CHECK_HASH, bytes(hashcode, ENCODING), writer)
 
-    def send(self, msg: str):
-        self.__socket.send(bytes(msg, "utf-8"))
+        writer.close()
+        await writer.wait_closed()
 
-    def close(self):
-        self.__socket.close()
+    async def send_blocks(self, blocks: List[Block]):
+        reader, writer = await asyncio.open_connection(self.host, self.port)
+        await send(SEND_BLOCKS, pickle.dumps(blocks), writer)
 
-
-class ClientSocket:
-    def __init__(self, connection: Tuple, on_close: Callable):
-        self.__connection = connection
-        self.__on_close = on_close
-
-    def close(self):
-        try:
-            self.__socket.close()
-        finally:
-            self.__on_close(self)
-
-    def receive(self) -> str:
-        buf = self.__socket.recv(1024)
-        result = ""
-        while buf:
-            result += buf.decode("utf-8")
-            buf = self.__socket.recv(1024)
-        return result
-
-    def send(self, msg: str):
-        self.__socket.send(bytes(msg, "utf-8"))
-
-    @property
-    def __socket(self) -> socket:
-        return self.__connection[0]
-
-    @property
-    def host(self):
-        return self.__connection[1][0]
-
-    @property
-    def port(self):
-        return self.__connection[1][1]
-
-    @property
-    def address(self) -> str:
-        return str(self.host) + ":" + str(self.port)
+        writer.close()
+        await writer.wait_closed()
 
 
 class Server:
-    def __init__(self, addr: Tuple[str, int], on_open_socket: Callable):
-        self.__on_open_socket = on_open_socket
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
+        self.block_chain = BlockChain()
+        self.protocol: Dict[bytes, Callable[[bytes], None]] = {
+            SEND_BLOCKS: self.receive_blocks,
+            CHECK_HASH: self.check_hash
+        }
 
-        # server socket
-        self.__socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        self.__socket.bind(addr)
+    async def handle_client(self, reader: StreamReader, writer: StreamWriter):
+        host, port = writer.get_extra_info("peername")
+        logger.info("Incoming connection from: " + str(host) + ":" + str(port))
 
-        # connected clients
-        self.__client_sockets = set()
+        buffer = await reader.read()
+        protocol_id = buffer[:1]
+        if self.protocol.__contains__(protocol_id):
+            data_handler = self.protocol.get(protocol_id)
+            data = buffer[1:]
+            data_handler(data)
+        else:
+            logger.warning("Invalid protocol id: " + protocol_id.hex())
 
-        # threading variables to accept connections
-        self.__listener = threading.Thread(target=self.__listen, daemon=True)
-        self.__lock = threading.Lock()
-        self.__stopped = threading.Event()
+        writer.close()
+        logger.info("Closed connection with: " + str(host) + ":" + str(port))
 
-    def __remove_socket(self, client_socket: ClientSocket):
-        with self.__lock:
-            self.__client_sockets.remove(client_socket)
+    def check_hash(self, data: bytes):
+        hashcode = data.decode(ENCODING)
+        if not self.block_chain.contains(hashcode):
+            logger.warning("Invalid hash to check '" + hashcode + "' does not exist")
+            return
 
-    def __add_socket(self, client_socket: ClientSocket):
-        with self.__lock:
-            self.__client_sockets.add(client_socket)
+        if self.block_chain.check(hashcode):
+            logger.info("Checking '" + hashcode + "' resolves in a consistent BlockChain")
+        else:
+            logger.error("Checking '" + hashcode + "' resolves in an inconsistent BlockChain")
 
-    def __listen(self):
-        while not self.__stopped.isSet():
-            client_socket = ClientSocket(self.__socket.accept(), on_close=self.__remove_socket)
-            self.__add_socket(client_socket)
-            self.__on_open_socket(client_socket)
+    def receive_blocks(self, data: bytes):
+        blocks: List[Block] = pickle.loads(data)
+        try:
+            for block in blocks:
+                self.block_chain.add(block)
+        except (BlockAlreadyExistsError, BlockSectionAlreadyFullError) as e:
+            logger.warning("Error while adding a Block to the BlockChain: " + str(e))
+            return
 
-    def start(self):
-        self.__socket.listen(socket.SOMAXCONN)
-        self.__listener.start()
+        hashcode = blocks[0].hash
+        if self.block_chain.check(hashcode):
+            logger.info("Successfully added blocks to section '" + hashcode + "'")
+        else:
+            logger.error("Problem after adding to blocks section '" + hashcode + "'")
 
-    def stop(self):
-        self.__stopped.set()
-        self.__socket.close()
+    async def start(self):
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        server_socket.bind((self.host, self.port))
+
+        logger.info("Starting server")
+        server = await asyncio.start_server(self.handle_client, sock=server_socket)
+        logger.info("Server started listening to " + self.host + ":" + str(self.port))
+
+        async with server:
+            await server.serve_forever()
