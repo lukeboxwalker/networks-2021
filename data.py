@@ -1,4 +1,8 @@
+import os
+import pickle
 import threading
+
+from os import path
 from typing import Dict, List
 from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
 
@@ -94,8 +98,7 @@ class BlockChain:
     """
 
     def __init__(self):
-        self.__chain: Dict[str, Dict[int, Block]] = dict()
-        self.__hash_tail = None
+        self.__chain: FileDictionary = FileDictionary()
         self.__lock = threading.Lock()
 
     def contains(self, hashcode: str) -> bool:
@@ -107,7 +110,7 @@ class BlockChain:
         :return: if the file for the given hash is already stored in the BlockChain.
         """
         with self.__lock:
-            return self.__chain.__contains__(hashcode)
+            return self.__chain.contains(hashcode)
 
     def check(self, hashcode: str) -> bool:
         """
@@ -119,11 +122,11 @@ class BlockChain:
         """
         with self.__lock:
             # Checks if the hash is in the BlockChain at all
-            if not self.__chain.__contains__(hashcode):
+            if not self.__chain.contains(hashcode):
                 return False
 
             # Fetching Blocks that represent the file of the hash
-            blocks = self.__chain[hashcode]
+            blocks = self.__chain.get(hashcode)
             block = set(blocks.values()).pop()
 
             # Check if all Blocks needed for the file are present
@@ -151,7 +154,7 @@ class BlockChain:
         is already full when trying to add the new Block.
         """
         with self.__lock:
-            if self.__chain.__contains__(block.hash):
+            if self.__chain.contains(block.hash):
                 blocks = self.__chain.get(block.hash)
 
                 # if the block to insert into the BlockChain has the same ordinal
@@ -166,13 +169,15 @@ class BlockChain:
                 if existing_block.index_all == len(blocks):
                     raise BlockSectionAlreadyFullError("The block section is already full!")
                 blocks[block.ordinal] = block.init_with_previous(existing_block.hash_previous)
+                self.__chain.set(block.hash, blocks)
             else:
                 # if the file has yet no existing block, a new section of Blocks is inserted into
                 # the BlockChain and the hash_tail is updated
-                self.__chain[block.hash] = {
-                    block.ordinal: block.init_with_previous(self.__hash_tail)
-                }
-                self.__hash_tail = block.hash
+                hash_previous = self.__chain.get_head()
+                self.__chain.set(block.hash, {
+                    block.ordinal: block.init_with_previous(hash_previous)
+                })
+                self.__chain.update_head(block.hash)
 
     def get(self, hashcode: str) -> List[Block]:
         """
@@ -181,7 +186,48 @@ class BlockChain:
         :return: list of Blocks for the given file hash. List is empty if the hash does not exist.
         """
         with self.__lock:
-            if not self.__chain.__contains__(hashcode):
+            if not self.__chain.contains(hashcode):
                 return []
             blocks = self.__chain.get(hashcode)
             return list(blocks.values())
+
+
+class FileDictionary:
+
+    def __init__(self):
+        self.root = os.getcwd() + "/BlockChain"
+        if not path.exists(self.root):
+            os.mkdir(self.root)
+        self.head = self.root + "/head"
+
+    def get_head(self):
+        if not path.isfile(self.head):
+            return None
+        with open(self.head, "r") as f:
+            return f.readline()
+
+    def update_head(self, head: str):
+        with open(self.head, "w") as f:
+            f.write(head)
+
+    def create_dir_if_not_exists(self, hashcode: str):
+        if not self.contains(hashcode):
+            os.mkdir(self.root + "/" + hashcode[:2])
+
+    def contains(self, hashcode: str) -> bool:
+        return path.isfile(self.root + "/" + hashcode[:2] + "/" + hashcode[2:])
+
+    def get_path(self, hashcode: str):
+        return self.root + "/" + hashcode[:2] + "/" + hashcode[2:]
+
+    def get(self, hashcode: str) -> Dict[int, Block]:
+        self.create_dir_if_not_exists(hashcode)
+        with open(self.get_path(hashcode), "rb") as f:
+            return pickle.load(f)
+
+    def set(self, hashcode: str, blocks: Dict[int, Block]):
+        self.create_dir_if_not_exists(hashcode)
+        with open(self.get_path(hashcode), "wb") as f:
+            pickle.dump(blocks, f)
+
+

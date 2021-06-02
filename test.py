@@ -9,19 +9,13 @@ if __name__ == '__main__':
     port = 10005
     client = Client(host, port)
 
-    filepath = "data.py"
+    filepath = "web.py"
     name = os.path.split(filepath)
     hashcode, blocks = create_blocks(load_file(filepath), name[1])
 
-    asyncio.run(client.send_blocks(blocks[1:]))
+    asyncio.run(client.send_blocks(blocks))
 
     asyncio.run(client.check_hash(hashcode))
-
-    asyncio.run(client.send_blocks(blocks[:1]))
-
-    asyncio.run(client.check_hash(hashcode))
-
-    asyncio.run(client.send_blocks(blocks[1:]))
 
 
 
