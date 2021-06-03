@@ -7,5 +7,5 @@ if __name__ == '__main__':
     port = 10005
     client = Client(host, port)
 
-    filepath = "handler.py"
+    filepath = "data.py"
     asyncio.run(client.add_file(filepath))

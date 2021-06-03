@@ -5,10 +5,18 @@ import socket
 from asyncio import StreamReader, StreamWriter
 from typing import List, Dict, Callable
 
-import constant
-import handler
-from data import Block, BlockChain, BlockCMD, load_file
-from logger import logger
+from data import BlockChain, BlockCMD, load_file, generate_hash
+from exceptions import BlockSectionInconsistentError, BlockInsertionError
+from logger import logger, INFO, WARNING, ERROR
+
+# String encoding
+ENCODING = "utf-8"
+
+# Protocol ids
+LOG_TEXT = b'0'
+SEND_BLOCKS = b'1'
+CHECK_HASH = b'2'
+CHECK_FILE = b'3'
 
 
 async def read(protocol: Dict[bytes, Callable], reader: StreamReader, writer: StreamWriter):
@@ -20,11 +28,11 @@ async def read(protocol: Dict[bytes, Callable], reader: StreamReader, writer: St
 
         result = data_handler(data)
         if result:
-            await send(constant.LOG_TEXT, result, writer)
+            await send(LOG_TEXT, result, writer)
     else:
         message = "Invalid protocol id: " + protocol_id.hex()
         logger.warning(message)
-        await send(constant.LOG_TEXT, bytes(message, constant.ENCODING), writer)
+        await send(LOG_TEXT, bytes(message, ENCODING), writer)
 
 
 async def send(protocol_id: bytes, message: bytes, writer: StreamWriter):
@@ -39,12 +47,12 @@ class Client:
         self.host = host
         self.port = port
         self.protocol: Dict[bytes, Callable[[bytes], None]] = {
-            constant.LOG_TEXT: handler.log,
+            LOG_TEXT: log,
         }
 
     async def check_hash(self, hashcode: str):
         reader, writer = await asyncio.open_connection(self.host, self.port)
-        await send(constant.CHECK_HASH, bytes(hashcode, constant.ENCODING), writer)
+        await send(CHECK_HASH, bytes(hashcode, ENCODING), writer)
 
         await read(self.protocol, reader, writer)
 
@@ -52,10 +60,10 @@ class Client:
         await writer.wait_closed()
 
     async def check_file(self, filepath: str):
-        await self.__send_file(constant.CHECK_FILE, load_file(filepath))
+        await self.__send_file(CHECK_FILE, load_file(filepath))
 
     async def add_file(self, filepath: str):
-        await self.__send_file(constant.SEND_BLOCKS, load_file(filepath))
+        await self.__send_file(SEND_BLOCKS, load_file(filepath))
 
     async def __send_file(self, protocol: bytes, blocks: List[BlockCMD]):
         reader, writer = await asyncio.open_connection(self.host, self.port)
@@ -75,9 +83,9 @@ class Server:
         self.port = port
         self.block_chain = BlockChain()
         self.protocol: Dict[bytes, Callable[[bytes], bytes]] = {
-            constant.SEND_BLOCKS: lambda data: handler.receive_blocks(self.block_chain, data),
-            constant.CHECK_HASH: lambda data: handler.check_hash(self.block_chain, data),
-            constant.CHECK_FILE: lambda data: handler.check_file(self.block_chain, data)
+            SEND_BLOCKS: lambda data: receive_blocks(self.block_chain, data),
+            CHECK_HASH: lambda data: check_hash(self.block_chain, data),
+            CHECK_FILE: lambda data: check_file(self.block_chain, data)
         }
 
     async def handle_client(self, reader: StreamReader, writer: StreamWriter):
@@ -99,3 +107,61 @@ class Server:
 
         async with server:
             await server.serve_forever()
+
+
+def __log_result(log_level: bytes, message: str):
+    logger.log(log_level, message)
+    return log_level + bytes(message, ENCODING)
+
+
+def log(data: bytes):
+    log_level = data[:1]
+    message = data[1:]
+    logger.log(log_level, message.decode(ENCODING))
+
+
+def check_hash(block_chain: BlockChain, data: bytes) -> bytes:
+    hashcode = data.decode(ENCODING)
+
+    if not block_chain.contains(hashcode):
+        message = "Invalid hash to check '" + hashcode + "' does not exist"
+        return __log_result(WARNING, message)
+
+    if block_chain.check(hashcode):
+        message = "Checking '" + hashcode + "' resolves in a consistent BlockChain"
+        return __log_result(INFO, message)
+
+    message = "Checking '" + hashcode + "' resolves in an inconsistent BlockChain"
+    return __log_result(ERROR, message)
+
+
+def check_file(block_chain: BlockChain, data: bytes):
+    blocks: List[BlockCMD] = pickle.loads(data)
+    try:
+        hashcode = generate_hash(blocks)
+    except BlockSectionInconsistentError as e:
+        message = "Error while generating hash for file: " + str(e)
+        return __log_result(WARNING, message)
+
+    if not block_chain.contains(hashcode):
+        message = "File with hash '" + hashcode + "' does not exists in the BlockChain!"
+        return __log_result(WARNING, message)
+
+    if block_chain.check(hashcode):
+        message = "File with hash '" + hashcode + "' exists in the BlockChain"
+        return __log_result(INFO, message)
+
+    message = "File with hash '" + hashcode + "' exists but the BlockChain is inconsistent!"
+    return __log_result(INFO, message)
+
+
+def receive_blocks(block_chain: BlockChain, data: bytes):
+    blocks: List[BlockCMD] = pickle.loads(data)
+    try:
+        hashcode = block_chain.add(blocks)
+    except (BlockInsertionError, BlockSectionInconsistentError) as e:
+        message = "Error while adding Blocks to the BlockChain: " + str(e)
+        return __log_result(WARNING, message)
+
+    message = "Added blocks with hash '" + hashcode + "'"
+    return __log_result(INFO, message)

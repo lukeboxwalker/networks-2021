@@ -1,6 +1,10 @@
 import logging
 from typing import Callable, Dict
-import constant
+
+# Log levels
+INFO = b'0'
+WARNING = b'1'
+ERROR = b'2'
 
 
 class CustomFormatter(logging.Formatter):
@@ -29,9 +33,9 @@ class Logger:
         self.logger.addHandler(console)
 
         self.log_levels: Dict[bytes, Callable] = {
-            constant.INFO: self.logger.info,
-            constant.WARNING: self.logger.warning,
-            constant.ERROR: self.logger.error
+            INFO: self.logger.info,
+            WARNING: self.logger.warning,
+            ERROR: self.logger.error
         }
 
     def log(self, log_level: bytes, message: str):

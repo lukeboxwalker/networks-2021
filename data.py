@@ -6,9 +6,10 @@ import zlib
 
 from os import path
 from typing import Dict, List
-
-import constant
 from exceptions import BlockInsertionError, BlockSectionInconsistentError
+
+# Chunk size for the data a single Block is holding.
+CHUNK_SIZE = 500
 
 
 class BlockCMD:
@@ -375,7 +376,7 @@ def load_file(filepath: str) -> List[BlockCMD]:
     chunks: List[bytes] = []
     with open(filepath, "rb") as f:
         while True:
-            chunk = f.read(constant.CHUNK_SIZE)
+            chunk = f.read(CHUNK_SIZE)
             if not chunk:
                 break
             chunks.append(chunk)
