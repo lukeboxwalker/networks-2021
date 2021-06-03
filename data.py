@@ -17,7 +17,7 @@ class BlockCMD:
     Class that represents a Block that was send from a client.
 
     There is no hash as well as no hash previous because only the server
-    should determine there values.
+    should determine there values in the real stored Block.
     """
 
     def __init__(self, index_all: int, ordinal: int, chunk: bytes, filename: str):
@@ -384,7 +384,7 @@ def load_file(filepath: str) -> List[BlockCMD]:
     return [BlockCMD(index_all, ordinal, chunks[ordinal], filename) for ordinal in range(index_all)]
 
 
-def create_file_from_blocks(blocks: List[Block]):
+def create_file_from_blocks(blocks: List[BlockCMD]):
     if not blocks:
         return
     blocks.sort(key=lambda x: x.ordinal)
