@@ -2,8 +2,8 @@ import pickle
 from typing import List
 
 import constant
-from data import Block, BlockChain
-from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
+from data import BlockChain, BlockCMD, generate_hash
+from exceptions import BlockInsertionError, BlockSectionInconsistentError
 from logger import logger
 
 
@@ -33,19 +33,33 @@ def check_hash(block_chain: BlockChain, data: bytes) -> bytes:
     return __log_result(constant.ERROR, message)
 
 
-def receive_blocks(block_chain: BlockChain, data: bytes):
-    blocks: List[Block] = pickle.loads(data)
+def check_file(block_chain: BlockChain, data: bytes):
+    blocks: List[BlockCMD] = pickle.loads(data)
     try:
-        for block in blocks:
-            block_chain.add(block)
-    except (BlockAlreadyExistsError, BlockSectionAlreadyFullError) as e:
-        message = "Error while adding a Block to the BlockChain: " + str(e)
+        hashcode = generate_hash(blocks)
+    except BlockSectionInconsistentError as e:
+        message = "Error while generating hash for file: " + str(e)
         return __log_result(constant.WARNING, message)
 
-    hashcode = blocks[0].hash
+    if not block_chain.contains(hashcode):
+        message = "File with hash '" + hashcode + "' does not exists in the BlockChain!"
+        return __log_result(constant.WARNING, message)
+
     if block_chain.check(hashcode):
-        message = "Successfully added blocks to section '" + hashcode + "'"
+        message = "File with hash '" + hashcode + "' exists in the BlockChain"
         return __log_result(constant.INFO, message)
 
-    message = "Problem after adding to blocks section '" + hashcode + "'"
-    return __log_result(constant.ERROR, message)
+    message = "File with hash '" + hashcode + "' exists but the BlockChain is inconsistent!"
+    return __log_result(constant.INFO, message)
+
+
+def receive_blocks(block_chain: BlockChain, data: bytes):
+    blocks: List[BlockCMD] = pickle.loads(data)
+    try:
+        hashcode = block_chain.add(blocks)
+    except (BlockInsertionError, BlockSectionInconsistentError) as e:
+        message = "Error while adding Blocks to the BlockChain: " + str(e)
+        return __log_result(constant.WARNING, message)
+
+    message = "Added blocks with hash '" + hashcode + "'"
+    return __log_result(constant.INFO, message)

@@ -7,7 +7,7 @@ from typing import List, Dict, Callable
 
 import constant
 import handler
-from data import Block, BlockChain
+from data import Block, BlockChain, BlockCMD, load_file
 from logger import logger
 
 
@@ -51,11 +51,17 @@ class Client:
         writer.close()
         await writer.wait_closed()
 
-    async def send_blocks(self, blocks: List[Block]):
+    async def check_file(self, filepath: str):
+        await self.__send_file(constant.CHECK_FILE, load_file(filepath))
+
+    async def add_file(self, filepath: str):
+        await self.__send_file(constant.SEND_BLOCKS, load_file(filepath))
+
+    async def __send_file(self, protocol: bytes, blocks: List[BlockCMD]):
         reader, writer = await asyncio.open_connection(self.host, self.port)
 
         logger.info("Sending " + str(len(blocks)) + " Block(s) to the server")
-        await send(constant.SEND_BLOCKS, pickle.dumps(blocks), writer)
+        await send(protocol, pickle.dumps(blocks), writer)
 
         await read(self.protocol, reader, writer)
 
@@ -70,7 +76,8 @@ class Server:
         self.block_chain = BlockChain()
         self.protocol: Dict[bytes, Callable[[bytes], bytes]] = {
             constant.SEND_BLOCKS: lambda data: handler.receive_blocks(self.block_chain, data),
-            constant.CHECK_HASH: lambda data: handler.check_hash(self.block_chain, data)
+            constant.CHECK_HASH: lambda data: handler.check_hash(self.block_chain, data),
+            constant.CHECK_FILE: lambda data: handler.check_file(self.block_chain, data)
         }
 
     async def handle_client(self, reader: StreamReader, writer: StreamWriter):

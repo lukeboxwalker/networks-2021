@@ -5,6 +5,7 @@ ENCODING = "utf-8"
 LOG_TEXT = b'0'
 SEND_BLOCKS = b'1'
 CHECK_HASH = b'2'
+CHECK_FILE = b'3'
 
 # Log levels
 INFO = b'0'

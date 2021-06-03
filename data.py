@@ -1,10 +1,67 @@
+import hashlib
 import os
 import pickle
 import threading
+import zlib
 
 from os import path
 from typing import Dict, List
-from exceptions import BlockAlreadyExistsError, BlockSectionAlreadyFullError
+
+import constant
+from exceptions import BlockInsertionError, BlockSectionInconsistentError
+
+
+class BlockCMD:
+    """
+    Class that represents a Block that was send from a client.
+
+    There is no hash as well as no hash previous because only the server
+    should determine there values.
+    """
+
+    def __init__(self, index_all: int, ordinal: int, chunk: bytes, filename: str):
+        self.__index_all = index_all
+        self.__ordinal = ordinal
+        self.__filename = filename
+        self.__chunk = chunk
+
+    @property
+    def index_all(self) -> int:
+        """
+        Property function to ensure that the number of Blocks is a read only variable.
+
+        :return: the number of Blocks that represent the file as an integer.
+        """
+        return self.__index_all
+
+    @property
+    def ordinal(self) -> int:
+        """
+        Property function to ensure that the ordinal is a read only variable.
+        If there are n blocks that represent a file, the ordinal value of a single block
+        is between 0 and n - 1.
+
+        :return: the ordinal of this block as an integer.
+        """
+        return self.__ordinal
+
+    @property
+    def chunk(self) -> bytes:
+        """
+        Property function to ensure that the chunk of data is a read only variable.
+        The byte data is stored as a Block.BUF_SIZE large chunk in the each Block.
+
+        :return: the chunk of data as bytes.
+        """
+        return self.__chunk
+
+    @property
+    def filename(self) -> str:
+        """
+        Property function to ensure that the filename is a read only variable.
+        :return: the filename of the file as a string.
+        """
+        return self.__filename
 
 
 class Block:
@@ -12,18 +69,12 @@ class Block:
     Class that represents a Block in a BlockChain.
     """
 
-    def __init__(self,
-                 hashcode: str,
-                 index_all: int,
-                 ordinal: int,
-                 chunk: bytes,
-                 filename: str,
-                 hash_previous=None):
+    def __init__(self, hashcode: str, hash_previous: str, block_cmd: BlockCMD):
         self.__hashcode = hashcode
-        self.__index_all = index_all
-        self.__ordinal = ordinal
-        self.__filename = filename
-        self.__chunk = chunk
+        self.__index_all = block_cmd.index_all
+        self.__ordinal = block_cmd.ordinal
+        self.__filename = block_cmd.filename
+        self.__chunk = block_cmd.chunk
         self.__hash_previous = hash_previous
 
     @property
@@ -81,14 +132,39 @@ class Block:
         """
         return self.__hash_previous
 
-    def init_with_previous(self, hashcode: str):
-        """
-        Initializes a new Block with given previous hashcode of a previous Block. Because fields of
-        a Block should stay immutable. Therefore a new Block is created.
 
-        :return: a completely new Block object with the new given previous hashcode.
-        """
-        return Block(self.hash, self.index_all, self.ordinal, self.chunk, self.filename, hashcode)
+class BlockSectionCMD:
+    def __init__(self, blocks: List[BlockCMD]):
+        self.__blocks: Dict[int, BlockCMD] = dict()
+        self.__index_all = None
+        self.__filename = None
+
+        for block in blocks:
+            if self.__blocks.__contains__(block.ordinal):
+                raise BlockSectionInconsistentError("Duplicate block in section!")
+
+            if self.index_all is not None and self.index_all != block.index_all:
+                raise BlockSectionInconsistentError("Inconsistent blocks!")
+
+            if self.filename is not None and self.filename != block.filename:
+                raise BlockSectionInconsistentError("Inconsistent blocks!")
+
+            self.__index_all = block.index_all
+            self.__filename = block.filename
+            self.__blocks[block.ordinal] = block
+
+    @property
+    def filename(self):
+        return self.__filename
+
+    @property
+    def index_all(self):
+        return self.__index_all
+
+    def get_in_order(self) -> List[BlockCMD]:
+        blocks = list(self.__blocks.values())
+        blocks.sort(key=lambda x: x.ordinal)
+        return blocks
 
 
 class BlockChain:
@@ -128,7 +204,7 @@ class BlockChain:
 
             # Fetching Blocks that represent the file of the hash
             blocks = self.__chain.get(file_hash)
-            block = set(blocks.values()).pop()
+            block = blocks[0]
 
             # Check if all Blocks needed for the file are present
             if block.index_all != len(blocks):
@@ -143,7 +219,7 @@ class BlockChain:
         with self.__lock:
             return check_hash(hashcode)
 
-    def add(self, block: Block) -> None:
+    def add(self, new_blocks: List[BlockCMD]) -> str:
         """
         Adds a new Block to the BlockChain.
         Method performs a thread safe action on the BlockChain by acquiring a lock.
@@ -151,37 +227,24 @@ class BlockChain:
         Creates a new section of Blocks for a new file or add a Block to an existing
         Block section in the BlockChain.
 
-        :param block: the block to insert into the BlockChain.
-        :raises BlockAlreadyExistsError: when a Block in the BlockChain already
-        exists when trying to add the new Block.
-        :raises BlockSectionAlreadyFullError: when a Block section of a file in the BlockChain
-        is already full when trying to add the new Block.
+        :param new_blocks: the blocks to insert into the BlockChain.
+        :raises BlockInsertionError: when the File the new Blocks are representing are already
+        part of the BlockChain.
         """
         with self.__lock:
-            if self.__chain.contains(block.hash):
-                blocks = self.__chain.get(block.hash)
+            if not new_blocks:
+                raise BlockInsertionError("There are no Blocks to insert!")
 
-                # if the block to insert into the BlockChain has the same ordinal
-                # as an existing block, the block already exists and an Error is raised
-                if blocks.__contains__(block.ordinal):
-                    raise BlockAlreadyExistsError("Block already exists!")
-                existing_block = set(blocks.values()).pop()
+            hashcode = generate_hash(new_blocks)
 
-                # if the block section for the file of the block hash given is already
-                # full or rather there are no more blocks needed to store the file and
-                # an Error is raised
-                if existing_block.index_all == len(blocks):
-                    raise BlockSectionAlreadyFullError("The block section is already full!")
-                blocks[block.ordinal] = block.init_with_previous(existing_block.hash_previous)
-                self.__chain.set(block.hash, blocks)
-            else:
-                # if the file has yet no existing block, a new section of Blocks is inserted into
-                # the BlockChain and the hash_tail is updated
-                hash_previous = self.__chain.get_head()
-                self.__chain.set(block.hash, {
-                    block.ordinal: block.init_with_previous(hash_previous)
-                })
-                self.__chain.update_head(block.hash)
+            if self.__chain.contains(hashcode):
+                raise BlockInsertionError("File already exists!")
+
+            hash_previous = self.__chain.get_head()
+            self.__chain.set(hashcode, [Block(hashcode, hash_previous, cmd) for cmd in new_blocks])
+            self.__chain.update_head(hashcode)
+
+            return hashcode
 
     def get(self, hashcode: str) -> List[Block]:
         """
@@ -190,10 +253,7 @@ class BlockChain:
         :return: list of Blocks for the given file hash. List is empty if the hash does not exist.
         """
         with self.__lock:
-            if not self.__chain.contains(hashcode):
-                return []
-            blocks = self.__chain.get(hashcode)
-            return list(blocks.values())
+            return self.__chain.get(hashcode)
 
 
 class FileDictionary:
@@ -250,8 +310,8 @@ class FileDictionary:
         """
         if not path.isfile(self.head):
             return None
-        with open(self.head, "r") as f:
-            return f.readline()
+        with open(self.head, "r") as file:
+            return file.readline()
 
     def update_head(self, hashcode: str):
         """
@@ -259,8 +319,8 @@ class FileDictionary:
 
         :param hashcode: hash to update head with.
         """
-        with open(self.head, "w") as f:
-            f.write(hashcode)
+        with open(self.head, "w") as file:
+            file.write(hashcode)
 
     def contains(self, hashcode: str) -> bool:
         """
@@ -271,7 +331,7 @@ class FileDictionary:
         """
         return path.isfile(self.__get_path(hashcode))
 
-    def get(self, hashcode: str) -> Dict[int, Block]:
+    def get(self, hashcode: str) -> List[Block]:
         """
         Loads all Blocks stored for the file hash.
 
@@ -279,11 +339,14 @@ class FileDictionary:
         :return: the Blocks saved under the given hashcode as a Dict. Where the key is
         the ordinal of a block.
         """
-        self.__create_dir_if_not_exists(hashcode)
-        with open(self.__get_path(hashcode), "rb") as f:
-            return pickle.load(f)
+        if not self.contains(hashcode):
+            return []
 
-    def set(self, hashcode: str, blocks: Dict[int, Block]):
+        with open(self.__get_path(hashcode), "rb") as file:
+            data = file.read()
+            return pickle.loads(zlib.decompress(data))
+
+    def set(self, hashcode: str, blocks: List[Block]):
         """
         Stored all given Blocks back to the file.
 
@@ -291,5 +354,39 @@ class FileDictionary:
         :param blocks: to save.
         """
         self.__create_dir_if_not_exists(hashcode)
-        with open(self.__get_path(hashcode), "wb") as f:
-            pickle.dump(blocks, f)
+        with open(self.__get_path(hashcode), "wb") as file:
+            data = pickle.dumps(blocks)
+            file.write(zlib.compress(data))
+
+
+def generate_hash(blocks: List[BlockCMD]):
+    block_section = BlockSectionCMD(blocks)
+    if not blocks:
+        raise BlockSectionInconsistentError("No Blocks to create hash from!")
+
+    sha256 = hashlib.sha256()
+    for block in block_section.get_in_order():
+        sha256.update(block.chunk)
+    return sha256.hexdigest()
+
+
+def load_file(filepath: str) -> List[BlockCMD]:
+    filename: str = os.path.split(filepath)[1]
+    chunks: List[bytes] = []
+    with open(filepath, "rb") as f:
+        while True:
+            chunk = f.read(constant.CHUNK_SIZE)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    index_all = len(chunks)
+    return [BlockCMD(index_all, ordinal, chunks[ordinal], filename) for ordinal in range(index_all)]
+
+
+def create_file_from_blocks(blocks: List[Block]):
+    if not blocks:
+        return
+    blocks.sort(key=lambda x: x.ordinal)
+    with open("test" + blocks[0].filename, "wb") as f:
+        for block in blocks:
+            f.write(block.chunk)

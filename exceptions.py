@@ -1,11 +1,10 @@
-class BlockAlreadyExistsError(Exception):
+class BlockInsertionError(Exception):
     """
-    Raised when a Block in the BlockChain already exists when trying to add the new Block.
+    Raised when a Block can not be inserted into the BlockChain.
     """
 
 
-class BlockSectionAlreadyFullError(Exception):
+class BlockSectionInconsistentError(Exception):
     """
-    Raised when a Block section of a file in the BlockChain is already full when
-    trying to add the new Block.
+    Raised when a Blocks of a block section are inconsistent.
     """
