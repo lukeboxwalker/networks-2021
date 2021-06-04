@@ -1,10 +1,19 @@
 import logging
+from enum import Enum
 from typing import Callable, Dict
 
+
 # Log levels
-INFO = b'0'
-WARNING = b'1'
-ERROR = b'2'
+class LogLevel(Enum):
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+
+
+class LogResult:
+    def __init__(self, log_level: LogLevel, message: str):
+        self.log_level = log_level
+        self.message = message
 
 
 class CustomFormatter(logging.Formatter):
@@ -32,15 +41,15 @@ class Logger:
 
         self.logger.addHandler(console)
 
-        self.log_levels: Dict[bytes, Callable] = {
-            INFO: self.logger.info,
-            WARNING: self.logger.warning,
-            ERROR: self.logger.error
+        self.log_levels: Dict[LogLevel, Callable] = {
+            LogLevel.INFO: self.logger.info,
+            LogLevel.WARNING: self.logger.warning,
+            LogLevel.ERROR: self.logger.error
         }
 
-    def log(self, log_level: bytes, message: str):
-        if self.log_levels.__contains__(log_level):
-            self.log_levels.get(log_level)(message)
+    def log(self, log_result: LogResult):
+        if self.log_levels.__contains__(log_result.log_level):
+            self.log_levels.get(log_result.log_level)(log_result.message)
 
     def info(self, message):
         self.logger.info(message)

@@ -379,19 +379,3 @@ def load_file(filepath: str) -> List[BlockCMD]:
             chunks.append(chunk)
     index_all = len(chunks)
     return [BlockCMD(index_all, ordinal, chunks[ordinal], filename) for ordinal in range(index_all)]
-
-
-def create_file_from_blocks(blocks: List[BlockCMD]):
-    """
-    Creates a new file from given blocks. Will do nothing if the list of blocks is empty.
-
-    :param blocks: the blocks to generate a file from.
-    """
-    if not blocks:
-        return
-    blocks.sort(key=lambda x: x.ordinal)
-
-    # write to file in binary mode
-    with open(blocks[0].filename, "wb") as file:
-        for block in blocks:
-            file.write(block.chunk)
