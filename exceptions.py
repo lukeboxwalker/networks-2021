@@ -6,5 +6,17 @@ class BlockInsertionError(Exception):
 
 class BlockSectionInconsistentError(Exception):
     """
-    Raised when a Blocks of a block section are inconsistent.
+    Raised when Blocks of a block section are inconsistent.
+    """
+
+
+class PackageCreationError(Exception):
+    """
+    Raised when unable to create package.
+    """
+
+
+class PackageHandleError(Exception):
+    """
+    Raised when unable to handle package.
     """

@@ -10,6 +10,8 @@ from exceptions import BlockSectionInconsistentError, BlockInsertionError
 from logger import logger, INFO, WARNING, ERROR
 
 # String encoding
+from transfer import PackageFactory, PackageHandler, CLIENT_MODE
+
 ENCODING = "utf-8"
 
 # Protocol ids
@@ -18,6 +20,8 @@ SEND_FILE = b'1'
 CHECK_HASH = b'2'
 CHECK_FILE = b'3'
 GET_FILE = b'4'
+
+package_factory = PackageFactory()
 
 
 async def read(packages: Dict, reader: StreamReader, writer: StreamWriter):
@@ -50,6 +54,8 @@ class Client:
         logger.info("Connecting to server " + str(host) + ":" + str(port))
         self.host = host
         self.port = port
+
+        self.package_handler = PackageHandler(CLIENT_MODE)
         self.protocol: Dict[bytes, Callable[[bytes], None]] = {
             LOG_TEXT: handle_log,
             SEND_FILE: handle_get_file
