@@ -5,10 +5,11 @@ import threading
 import zlib
 
 from os import path
-from typing import Dict, List
+from typing import List
 from exceptions import BlockInsertionError, BlockSectionInconsistentError
 
 # Chunk size for the data a single Block is holding.
+# Size is defined by project specification.
 CHUNK_SIZE = 500
 
 
@@ -134,40 +135,6 @@ class Block:
         return self.__hash_previous
 
 
-class BlockSectionCMD:
-    def __init__(self, blocks: List[BlockCMD]):
-        self.__blocks: Dict[int, BlockCMD] = dict()
-        self.__index_all = None
-        self.__filename = None
-
-        for block in blocks:
-            if self.__blocks.__contains__(block.ordinal):
-                raise BlockSectionInconsistentError("Duplicate block in section!")
-
-            if self.index_all is not None and self.index_all != block.index_all:
-                raise BlockSectionInconsistentError("Inconsistent blocks!")
-
-            if self.filename is not None and self.filename != block.filename:
-                raise BlockSectionInconsistentError("Inconsistent blocks!")
-
-            self.__index_all = block.index_all
-            self.__filename = block.filename
-            self.__blocks[block.ordinal] = block
-
-    @property
-    def filename(self):
-        return self.__filename
-
-    @property
-    def index_all(self):
-        return self.__index_all
-
-    def get_in_order(self) -> List[BlockCMD]:
-        blocks = list(self.__blocks.values())
-        blocks.sort(key=lambda x: x.ordinal)
-        return blocks
-
-
 class BlockChain:
     """
     Class that represents the BlockChain.
@@ -220,7 +187,7 @@ class BlockChain:
         with self.__lock:
             return check_hash(hashcode)
 
-    def add(self, new_blocks: List[BlockCMD]) -> str:
+    def add(self, blocks: List[BlockCMD]) -> str:
         """
         Adds a new Block to the BlockChain.
         Method performs a thread safe action on the BlockChain by acquiring a lock.
@@ -228,21 +195,21 @@ class BlockChain:
         Creates a new section of Blocks for a new file or add a Block to an existing
         Block section in the BlockChain.
 
-        :param new_blocks: the blocks to insert into the BlockChain.
+        :param blocks: the blocks to insert into the BlockChain.
         :raises BlockInsertionError: when the File the new Blocks are representing are already
         part of the BlockChain.
         """
         with self.__lock:
-            if not new_blocks:
+            if not blocks:
                 raise BlockInsertionError("There are no Blocks to insert!")
 
-            hashcode = generate_hash(new_blocks)
+            hashcode = generate_hash(blocks)
 
             if self.__chain.contains(hashcode):
                 raise BlockInsertionError("File already exists!")
 
             hash_previous = self.__chain.get_head()
-            self.__chain.set(hashcode, [Block(hashcode, hash_previous, cmd) for cmd in new_blocks])
+            self.__chain.set(hashcode, [Block(hashcode, hash_previous, block) for block in blocks])
             self.__chain.update_head(hashcode)
 
             return hashcode
@@ -266,12 +233,11 @@ class FileDictionary:
     resulting in a structure like:
 
     /.blockchain
-    +-- ...
-        +-- ...
     +-- /4c
         +-- /19f36a2221b34b4837b05a72bbf21f1ca65d61aca1c221dd41e77979a08d73
-    +-- ...
-        +-- ...
+
+    Where the file names 19f36a2221b34b4837b05a72bbf21f1ca65d61aca1c221dd41e77979a08d73 contains
+    all Blocks of the stored file.
 
     The last Block added to the BLockChain is saved in a file 'head'. If there is no file called
     'head' in the folder /.blockchain there is no data inside the BlockChain.
@@ -325,7 +291,8 @@ class FileDictionary:
 
     def contains(self, hashcode: str) -> bool:
         """
-        Checks if the file path for the given hashcode exists.
+        Checks if the file path for the given hashcode exists. Decompresses the byte array
+        stored to the file with zlib.
 
         :param hashcode: hash to check.
         :return: if the hash is part of the BlockChain.
@@ -349,7 +316,8 @@ class FileDictionary:
 
     def set(self, hashcode: str, blocks: List[Block]):
         """
-        Stored all given Blocks back to the file.
+        Stored all given Blocks back to the file. Compresses the byte array stored to the file
+        with zlib.
 
         :param hashcode: to save Blocks under.
         :param blocks: to save.
@@ -360,23 +328,52 @@ class FileDictionary:
             file.write(zlib.compress(data))
 
 
-def generate_hash(blocks: List[BlockCMD]):
-    block_section = BlockSectionCMD(blocks)
+def generate_hash(blocks: List[BlockCMD]) -> str:
+    """
+    Generates sha256 hash for given block list. If there is an error within the blocks no hash
+    will be generated.
+
+    :param blocks: the blocks of a file to generate the hash for.
+    :raise BlockSectionInconsistentError: if there are no blocks to create a hash for, if there
+    is a duplicate block identified by its ordinal, if the blocks contain different data regarding
+    the filename or the index_all.
+    :return: sha256 hash for the file.
+    """
     if not blocks:
         raise BlockSectionInconsistentError("No Blocks to create hash from!")
 
+    # check if each block is unique
+    if len({block.ordinal for block in blocks}) != len(blocks):
+        raise BlockSectionInconsistentError("Duplicate block in section!")
+
+    # check if information shared by the blocks is consistent
+    if len({(block.index_all, block.filename) for block in blocks}) != 1:
+        raise BlockSectionInconsistentError("Inconsistent blocks!")
+
+    # sort blocks in order to always generate the correct hash
+    blocks.sort(key=lambda x: x.ordinal)
+
+    # generate sha256 hash with python hashlib
     sha256 = hashlib.sha256()
-    for block in block_section.get_in_order():
+    for block in blocks:
         sha256.update(block.chunk)
     return sha256.hexdigest()
 
 
 def load_file(filepath: str) -> List[BlockCMD]:
+    """
+    Reading a file and converts it to a Block list by reading the file chunk by chunk.
+
+    :param filepath: filepath for the file to read.
+    :return: list of BlockCMD objects for transport.
+    """
     filename: str = os.path.split(filepath)[1]
     chunks: List[bytes] = []
-    with open(filepath, "rb") as f:
+
+    # reading the file in binary mode
+    with open(filepath, "rb") as file:
         while True:
-            chunk = f.read(CHUNK_SIZE)
+            chunk = file.read(CHUNK_SIZE)
             if not chunk:
                 break
             chunks.append(chunk)
@@ -385,9 +382,16 @@ def load_file(filepath: str) -> List[BlockCMD]:
 
 
 def create_file_from_blocks(blocks: List[BlockCMD]):
+    """
+    Creates a new file from given blocks. Will do nothing if the list of blocks is empty.
+
+    :param blocks: the blocks to generate a file from.
+    """
     if not blocks:
         return
     blocks.sort(key=lambda x: x.ordinal)
-    with open("test" + blocks[0].filename, "wb") as f:
+
+    # write to file in binary mode
+    with open(blocks[0].filename, "wb") as file:
         for block in blocks:
-            f.write(block.chunk)
+            file.write(block.chunk)
