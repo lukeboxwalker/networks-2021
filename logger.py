@@ -3,7 +3,6 @@ from enum import Enum
 from typing import Callable, Dict
 
 
-# Log levels
 class LogLevel(Enum):
     INFO = "INFO"
     WARNING = "WARNING"
@@ -12,8 +11,16 @@ class LogLevel(Enum):
 
 class LogResult:
     def __init__(self, log_level: LogLevel, message: str):
-        self.log_level = log_level
-        self.message = message
+        self.__log_level = log_level
+        self.__message = message
+
+    @property
+    def log_level(self):
+        return self.__log_level
+
+    @property
+    def message(self):
+        return self.__message
 
 
 class CustomFormatter(logging.Formatter):

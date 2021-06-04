@@ -6,20 +6,7 @@ from typing import List
 from data import BlockChain, BlockCMD, load_file, generate_hash
 from exceptions import BlockSectionInconsistentError, BlockInsertionError
 from logger import logger, LogLevel
-from transfer import PackageFactory, PackageHandler, PackageMode, Package, PackageId
-
-
-async def read(package_handler: PackageHandler, reader: StreamReader, writer: StreamWriter):
-    byte_buffer: bytes = await reader.read()
-    out_package = package_handler.handle(byte_buffer)
-    if out_package:
-        await send(out_package, writer)
-
-
-async def send(package: Package, writer: StreamWriter):
-    writer.write(package.raw)
-    writer.write_eof()
-    await writer.drain()
+from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
 
 
 class Client:
@@ -32,18 +19,6 @@ class Client:
 
         self.package_handler.install(PackageId.LOG_TEXT, logger.log)
         self.package_handler.install(PackageId.SEND_FILE, handle_get_file)
-
-    async def get_file(self, hashcode: str):
-        await self.__send_hash(PackageId.GET_FILE, hashcode)
-
-    async def check_hash(self, hashcode: str):
-        await self.__send_hash(PackageId.HASH_CHECK, hashcode)
-
-    async def check_file(self, filepath: str):
-        await self.__send_file(PackageId.FILE_CHECK, load_file(filepath))
-
-    async def add_file(self, filepath: str):
-        await self.__send_file(PackageId.SEND_FILE, load_file(filepath))
 
     async def __send_hash(self, package_id: PackageId, hashcode: str):
         reader, writer = await asyncio.open_connection(self.host, self.port)
@@ -66,6 +41,18 @@ class Client:
         writer.close()
         await writer.wait_closed()
 
+    async def get_file(self, hashcode: str):
+        await self.__send_hash(PackageId.GET_FILE, hashcode)
+
+    async def check_hash(self, hashcode: str):
+        await self.__send_hash(PackageId.HASH_CHECK, hashcode)
+
+    async def check_file(self, filepath: str):
+        await self.__send_file(PackageId.FILE_CHECK, load_file(filepath))
+
+    async def add_file(self, filepath: str):
+        await self.__send_file(PackageId.SEND_FILE, load_file(filepath))
+
 
 class Server:
     def __init__(self, host: str, port: int):
@@ -80,7 +67,7 @@ class Server:
         self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
         self.package_handler.install(PackageId.GET_FILE, self.handle_request_file)
 
-    async def handle_client(self, reader: StreamReader, writer: StreamWriter):
+    async def __handle_client(self, reader: StreamReader, writer: StreamWriter):
         host, port = writer.get_extra_info("peername")
         logger.info("Incoming connection from: " + str(host) + ":" + str(port))
 
@@ -94,7 +81,7 @@ class Server:
         server_socket.bind((self.host, self.port))
 
         logger.info("Starting server")
-        server = await asyncio.start_server(self.handle_client, sock=server_socket)
+        server = await asyncio.start_server(self.__handle_client, sock=server_socket)
         logger.info("Server started listening to " + self.host + ":" + str(self.port))
 
         async with server:
@@ -156,6 +143,19 @@ class Server:
         return self.package_factory.create_from_object(PackageId.SEND_FILE, cmd_blocks)
 
 
+async def read(package_handler: PackageHandler, reader: StreamReader, writer: StreamWriter):
+    byte_buffer: bytes = await reader.read()
+    out_package = package_handler.handle(byte_buffer)
+    if out_package:
+        await send(out_package, writer)
+
+
+async def send(package: Package, writer: StreamWriter):
+    writer.write(package.raw)
+    writer.write_eof()
+    await writer.drain()
+
+
 def handle_get_file(blocks: List[BlockCMD]):
     logger.info("Received " + str(len(blocks)) + " Block(s) from the server")
     if not blocks:
@@ -167,8 +167,3 @@ def handle_get_file(blocks: List[BlockCMD]):
     with open(blocks[0].filename, "wb") as file:
         for block in blocks:
             file.write(block.chunk)
-
-
-
-
-
