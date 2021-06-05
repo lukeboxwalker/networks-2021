@@ -1,15 +1,22 @@
 """
 Module to start client.
 """
-
-import asyncio
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from web import Client
 
-if __name__ == '__main__':
-    HOST = "localhost"
-    PORT = 10005
-    client = Client(HOST, PORT)
 
-    FILEPATH = "data.py"
-    asyncio.run(client.add_file(FILEPATH))
+if __name__ == '__main__':
+    host = "localhost"
+    port = 10005
+    client = Client(host, port)
+
+    filepath = "data.py"
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        executor.submit(client.add_file, filepath)
+        executor.submit(client.add_file, filepath)
+        executor.submit(client.add_file, filepath)
+        executor.submit(client.add_file, filepath)
+        executor.submit(client.add_file, filepath)
+        executor.submit(client.add_file, filepath)

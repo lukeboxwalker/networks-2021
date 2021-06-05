@@ -2,15 +2,15 @@
 Module that holds the classes and functions needed for the client server communication.
 """
 
-import asyncio
 import socket
 
-from asyncio import StreamReader, StreamWriter
 from typing import List
 from data import BlockChain, BlockCMD, load_file, generate_hash
 from exceptions import BlockSectionInconsistentError, BlockInsertionError
 from logger import logger, LogLevel
 from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
+
+BUFF_SIZE = 1024
 
 
 class Client:
@@ -32,7 +32,7 @@ class Client:
         self.package_handler.install(PackageId.LOG_TEXT, logger.log)
         self.package_handler.install(PackageId.SEND_FILE, handle_get_file)
 
-    async def __send_hash(self, package_id: PackageId, hashcode: str):
+    def __send_hash(self, package_id: PackageId, hashcode: str):
         """
         Sends a hash to the server with given package id.
 
@@ -40,16 +40,17 @@ class Client:
         :param hashcode: to send to server.
         """
         logger.info("Connecting to server " + str(self.host) + ":" + str(self.port))
-        reader, writer = await asyncio.open_connection(self.host, self.port)
+        client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        client_sock.connect((self.host, self.port))
+
         package = self.package_factory.create_from_object(package_id, hashcode)
 
-        await send(package, writer)
-        await read(self.package_handler, reader, writer)
+        send(package, client_sock)
+        read(self.package_handler, client_sock)
 
-        writer.close()
-        await writer.wait_closed()
+        client_sock.close()
 
-    async def __send_file(self, package_id: PackageId, blocks: List[BlockCMD]):
+    def __send_file(self, package_id: PackageId, blocks: List[BlockCMD]):
         """
         Sends a file in form of blocks to the server with given package id.
 
@@ -57,49 +58,50 @@ class Client:
         :param blocks: the blocks of a file to send.
         """
         logger.info("Connecting to server " + str(self.host) + ":" + str(self.port))
-        reader, writer = await asyncio.open_connection(self.host, self.port)
+        client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        client_sock.connect((self.host, self.port))
+
         package = self.package_factory.create_from_object(package_id, blocks)
 
         logger.info("Sending " + str(len(blocks)) + " Block(s) to the server")
-        await send(package, writer)
-        await read(self.package_handler, reader, writer)
+        send(package, client_sock)
+        read(self.package_handler, client_sock)
 
-        writer.close()
-        await writer.wait_closed()
+        client_sock.close()
 
-    async def get_file(self, hashcode: str):
+    def get_file(self, hashcode: str):
         """
         Loads a file from the server by the given hash value.
 
         :param hashcode: the file hash to restore the file from.
         """
-        await self.__send_hash(PackageId.GET_FILE, hashcode)
+        self.__send_hash(PackageId.GET_FILE, hashcode)
 
-    async def check_hash(self, hashcode: str):
+    def check_hash(self, hashcode: str):
         """
         Sends the hashcode to the server and requests a check on the hash.
 
         :param hashcode: to send to server and check.
         """
-        await self.__send_hash(PackageId.HASH_CHECK, hashcode)
+        self.__send_hash(PackageId.HASH_CHECK, hashcode)
 
-    async def check_file(self, filepath: str):
+    def check_file(self, filepath: str):
         """
         Loads a file by its given filepath, splits it into chunks/blocks
         and requests a check on the file.
 
         :param filepath: to the file to send to server and check.
         """
-        await self.__send_file(PackageId.FILE_CHECK, load_file(filepath))
+        self.__send_file(PackageId.FILE_CHECK, load_file(filepath))
 
-    async def add_file(self, filepath: str):
+    def add_file(self, filepath: str):
         """
         Loads a file by its given filepath, splits it into chunks/blocks of data and sends it
         to the server to store it.
 
         :param filepath: to the file to send to server.
         """
-        await self.__send_file(PackageId.SEND_FILE, load_file(filepath))
+        self.__send_file(PackageId.SEND_FILE, load_file(filepath))
 
 
 class Server:
@@ -124,36 +126,25 @@ class Server:
         self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
         self.package_handler.install(PackageId.GET_FILE, self.handle_request_file)
 
-    async def __handle_client(self, reader: StreamReader, writer: StreamWriter):
+    def start(self):
         """
-        Handle incoming clients. Waits for the client to send a package. So the server
-        can identify what request the client sends. Function needs to be called with asyncio.
-
-        :param reader: input stream of the server.
-        :param writer: output stream of the server.
+        Starts a TCP server. The server runs in an infinite loop to handle
+        incoming client connections.
         """
-        host, port = writer.get_extra_info("peername")
-        logger.info("Incoming connection from: " + str(host) + ":" + str(port))
-
-        await read(self.package_handler, reader, writer)
-
-        writer.close()
-        logger.info("Closed connection with: " + str(host) + ":" + str(port))
-
-    async def start(self):
-        """
-        Starts a TCP server by using asyncio. The server runs in an infinite loop to handle
-        incoming client connections. Function needs to be called with asyncio.
-        """
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        server_socket.bind((self.host, self.port))
 
         logger.info("Starting server")
-        server = await asyncio.start_server(self.__handle_client, sock=server_socket)
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        server_socket.bind((self.host, self.port))
+        server_socket.listen()
         logger.info("Server started listening to " + self.host + ":" + str(self.port))
 
-        async with server:
-            await server.serve_forever()
+        while True:
+            client_socket, addr = server_socket.accept()
+
+            logger.info("Incoming connection from: " + str(addr[0]) + ":" + str(addr[1]))
+            read(self.package_handler, client_socket)
+            client_socket.close()
+            logger.info("Closed connection with: " + str(addr[0]) + ":" + str(addr[1]))
 
     def handle_check_hash(self, hashcode: str):
         """
@@ -233,34 +224,40 @@ class Server:
         return self.package_factory.create_from_object(PackageId.SEND_FILE, cmd_blocks)
 
 
-async def read(package_handler: PackageHandler, reader: StreamReader, writer: StreamWriter):
+def read(package_handler: PackageHandler, sock: socket):
     """
-    Reading data from given input stream. Handles the incoming package by given PackageHandler
-    and sends a package back by using the given output stream.
+    Reading data from given socket. Handles the incoming package by given PackageHandler
+    and sends a package back.
 
     :param package_handler: to handle incoming packages.
-    :param reader: the input stream.
-    :param writer: the output stream.
+    :param sock: the socket to communicate to.
     """
 
-    byte_buffer: bytes = await reader.read()
+    byte_buffer = bytearray()
+    while True:
+        chunk = sock.recv(BUFF_SIZE)
+        byte_buffer += chunk
+        if len(chunk) < BUFF_SIZE:
+            break
+
     out_package = package_handler.handle(byte_buffer)
 
     # if out package is not None send it back.
     if out_package:
-        await send(out_package, writer)
+        send(out_package, sock)
 
 
-async def send(package: Package, writer: StreamWriter):
+def send(package: Package, sock: socket):
     """
-    Sends a package to the given output stream and closes the stream.
+    Sends a package to the given socket.
 
     :param package: the package to send.
-    :param writer: the output stream to write to.
+    :param sock: the socket to write to.
     """
-    writer.write(package.raw)
-    writer.write_eof()
-    await writer.drain()
+
+    data = package.raw
+    for i in range(0, len(data), BUFF_SIZE):
+        sock.send(data[i:i + BUFF_SIZE])
 
 
 def handle_get_file(blocks: List[BlockCMD]):
