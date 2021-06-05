@@ -1,3 +1,7 @@
+"""
+Module to start server.
+"""
+
 import asyncio
 
 from web import Server

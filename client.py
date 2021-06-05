@@ -1,3 +1,7 @@
+"""
+Module to start client.
+"""
+
 import asyncio
 
 from web import Client

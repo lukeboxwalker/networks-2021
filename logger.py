@@ -1,3 +1,7 @@
+"""
+Module that holds the classes and functions needed for the logger.
+"""
+
 import logging
 from enum import Enum
 from typing import Callable, Dict

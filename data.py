@@ -1,3 +1,7 @@
+"""
+Module that holds the classes and functions needed for the BlockChain.
+"""
+
 import hashlib
 import os
 import pickle

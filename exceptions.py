@@ -1,3 +1,8 @@
+"""
+Module that holds custom exceptions.
+"""
+
+
 class BlockInsertionError(Exception):
     """
     Raised when a Block can not be inserted into the BlockChain.
