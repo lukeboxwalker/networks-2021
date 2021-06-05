@@ -3,8 +3,9 @@ Module that holds the classes and functions needed for the client server communi
 """
 
 import socket
+from concurrent.futures.thread import ThreadPoolExecutor
 
-from typing import List
+from typing import List, Tuple
 from data import BlockChain, BlockCMD, load_file, generate_hash
 from exceptions import BlockSectionInconsistentError, BlockInsertionError
 from logger import logger, LogLevel
@@ -126,7 +127,13 @@ class Server:
         self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
         self.package_handler.install(PackageId.GET_FILE, self.handle_request_file)
 
-    def start(self):
+    def handle_client(self, sock: socket, addr: Tuple):
+        logger.info("Incoming connection from: " + str(addr[0]) + ":" + str(addr[1]))
+        read(self.package_handler, sock)
+        sock.close()
+        logger.info("Closed connection with: " + str(addr[0]) + ":" + str(addr[1]))
+
+    def start(self, max_workers: int = 1):
         """
         Starts a TCP server. The server runs in an infinite loop to handle
         incoming client connections.
@@ -138,13 +145,10 @@ class Server:
         server_socket.listen()
         logger.info("Server started listening to " + self.host + ":" + str(self.port))
 
-        while True:
-            client_socket, addr = server_socket.accept()
-
-            logger.info("Incoming connection from: " + str(addr[0]) + ":" + str(addr[1]))
-            read(self.package_handler, client_socket)
-            client_socket.close()
-            logger.info("Closed connection with: " + str(addr[0]) + ":" + str(addr[1]))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            while True:
+                sock, addr = server_socket.accept()  # TODO cant interrupt with CTRL + C
+                executor.submit(self.handle_client, sock, addr)
 
     def handle_check_hash(self, hashcode: str):
         """

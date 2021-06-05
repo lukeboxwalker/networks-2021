@@ -13,7 +13,7 @@ if __name__ == '__main__':
 
     filepath = "data.py"
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         executor.submit(client.add_file, filepath)
         executor.submit(client.add_file, filepath)
         executor.submit(client.add_file, filepath)
