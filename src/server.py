@@ -1,8 +1,18 @@
 """
 Module to start server.
 """
+from typing import Callable
 
-from src.web import Server
+from web import Server
+
+
+def wait_on_interrupt(callback: Callable):
+    try:
+        input()
+    except KeyboardInterrupt:
+        pass
+    callback()
+
 
 if __name__ == '__main__':
     HOST = "localhost"
@@ -11,8 +21,4 @@ if __name__ == '__main__':
     server = Server(HOST, PORT)
     server.start(max_workers=4)
 
-    try:
-        input()
-        server.stop()
-    except KeyboardInterrupt:
-        server.stop()
+    wait_on_interrupt(callback=server.stop)
