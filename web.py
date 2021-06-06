@@ -122,6 +122,8 @@ class Server:
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.server_socket.bind((self.host, self.port))
 
+        self.thread = None
+
         # create PackageFactory in CLIENT_MODE (creates packages that only a client accepts)
         # create PackageHandler in SERVER_MODE (can only handle packages directed to a server)
         self.package_factory = PackageFactory(PackageMode.CLIENT_MODE)
@@ -133,16 +135,13 @@ class Server:
         self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
         self.package_handler.install(PackageId.GET_FILE, self.handle_request_file)
 
-    def handle_client(self, sock: socket, addr: Tuple):
+    def __handle_client(self, sock: socket, addr: Tuple):
         logger.info("Incoming connection from: " + str(addr[0]) + ":" + str(addr[1]))
         read(self.package_handler, sock)
         sock.close()
         logger.info("Closed connection with: " + str(addr[0]) + ":" + str(addr[1]))
 
-    def stop(self):
-        self.server_socket.close()
-
-    def start(self, max_workers: int = 1):
+    def __start(self, max_workers: int = 1):
         """
         Starts a TCP server. The server runs in an infinite loop to handle
         incoming client connections.
@@ -156,11 +155,20 @@ class Server:
             while True:
                 try:
                     sock, addr = self.server_socket.accept()
-                    executor.submit(self.handle_client, sock, addr)
+                    executor.submit(self.__handle_client, sock, addr)
                 except OSError:
                     executor.shutdown(wait=True)
                     logger.info("Shutdown server")
                     break
+
+    def start(self,  max_workers: int = 1):
+        self.thread = threading.Thread(target=self.__start, args=(max_workers,), name="ServerThread")
+        self.thread.start()
+
+    def stop(self):
+        if self.thread and self.thread.is_alive():
+            self.server_socket.close()
+            self.thread.join()
 
     def handle_check_hash(self, hashcode: str):
         """

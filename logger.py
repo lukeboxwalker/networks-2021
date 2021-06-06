@@ -2,9 +2,12 @@
 Module that holds the classes and functions needed for the logger.
 """
 
+import colorama
 import logging
+
 from enum import Enum
 from typing import Callable, Dict
+from colorama import Fore, Style
 
 
 class LogLevel(Enum):
@@ -54,9 +57,9 @@ class ColorFormatter(logging.Formatter):
 
         # color codes for different log levels
         self.colors = {
-            "WARNING": "\033[33m",
-            "INFO": "\033[2m",
-            "ERROR": "\033[31m"
+            "WARNING": Fore.LIGHTYELLOW_EX,
+            "INFO": Fore.WHITE,
+            "ERROR": Fore.LIGHTRED_EX
         }
 
     def format(self, record):
@@ -67,7 +70,8 @@ class ColorFormatter(logging.Formatter):
         :param record: the record to format
         :return: the formatted string.
         """
-        return self.colors[record.levelname] + logging.Formatter.format(self, record) + "\033[0m"
+        name = record.levelname
+        return self.colors[name] + logging.Formatter.format(self, record) + Style.RESET_ALL
 
 
 class Logger:
@@ -130,6 +134,8 @@ class Logger:
         """
         self.logger.error(message)
 
+
+colorama.init()
 
 # Logger object to log to console
 logger = Logger()

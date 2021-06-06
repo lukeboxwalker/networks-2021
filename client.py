@@ -5,7 +5,6 @@ from concurrent.futures.thread import ThreadPoolExecutor
 
 from web import Client
 
-
 if __name__ == '__main__':
     host = "localhost"
     port = 10005
