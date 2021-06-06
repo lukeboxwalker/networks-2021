@@ -141,7 +141,10 @@ class Server:
     def __start(self, max_workers: int = 1):
         """
         Starts a TCP server. The server runs in an infinite loop to handle
-        incoming client connections.
+        incoming client connections. Clients are handle by a ThreadPoolExecutor so the server
+        can accept a new client.
+
+        :param max_workers: number of worker threads that will handle the client communication.
         """
 
         logger.info("Starting server")
@@ -159,11 +162,19 @@ class Server:
                     break
 
     def start(self,  max_workers: int = 1):
+        """
+        Start the server in its own thread.
+
+        :param max_workers: number of worker threads that will handle the client communication.
+        """
         name = "ServerThread"
         self.thread = threading.Thread(target=self.__start, args=(max_workers,), name=name)
         self.thread.start()
 
     def stop(self):
+        """
+        Stops the server if it is running and joins the server thread until it is finished.
+        """
         if self.thread and self.thread.is_alive():
             self.server_socket.close()
             self.thread.join()
