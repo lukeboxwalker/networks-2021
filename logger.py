@@ -2,11 +2,12 @@
 Module that holds the classes and functions needed for the logger.
 """
 
-import colorama
 import logging
 
 from enum import Enum
 from typing import Callable, Dict
+
+import colorama
 from colorama import Fore, Style
 
 

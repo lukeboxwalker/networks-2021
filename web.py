@@ -1,13 +1,10 @@
 """
 Module that holds the classes and functions needed for the client server communication.
 """
-import os
-import select
 import socket
 import threading
-import time
-from concurrent.futures.thread import ThreadPoolExecutor
 
+from concurrent.futures.thread import ThreadPoolExecutor
 from typing import List, Tuple
 from data import BlockChain, BlockCMD, load_file, generate_hash
 from exceptions import BlockSectionInconsistentError, BlockInsertionError
@@ -162,7 +159,8 @@ class Server:
                     break
 
     def start(self,  max_workers: int = 1):
-        self.thread = threading.Thread(target=self.__start, args=(max_workers,), name="ServerThread")
+        name = "ServerThread"
+        self.thread = threading.Thread(target=self.__start, args=(max_workers,), name=name)
         self.thread.start()
 
     def stop(self):
