@@ -1,8 +1,11 @@
 """
 Module that holds the classes and functions needed for the client server communication.
 """
-
+import os
+import select
 import socket
+import threading
+import time
 from concurrent.futures.thread import ThreadPoolExecutor
 
 from typing import List, Tuple
@@ -116,6 +119,9 @@ class Server:
         self.port = port
         self.block_chain = BlockChain()
 
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        self.server_socket.bind((self.host, self.port))
+
         # create PackageFactory in CLIENT_MODE (creates packages that only a client accepts)
         # create PackageHandler in SERVER_MODE (can only handle packages directed to a server)
         self.package_factory = PackageFactory(PackageMode.CLIENT_MODE)
@@ -133,6 +139,9 @@ class Server:
         sock.close()
         logger.info("Closed connection with: " + str(addr[0]) + ":" + str(addr[1]))
 
+    def stop(self):
+        self.server_socket.close()
+
     def start(self, max_workers: int = 1):
         """
         Starts a TCP server. The server runs in an infinite loop to handle
@@ -140,15 +149,18 @@ class Server:
         """
 
         logger.info("Starting server")
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        server_socket.bind((self.host, self.port))
-        server_socket.listen()
+        self.server_socket.listen()
         logger.info("Server started listening to " + self.host + ":" + str(self.port))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             while True:
-                sock, addr = server_socket.accept()  # TODO cant interrupt with CTRL + C
-                executor.submit(self.handle_client, sock, addr)
+                try:
+                    sock, addr = self.server_socket.accept()
+                    executor.submit(self.handle_client, sock, addr)
+                except OSError:
+                    executor.shutdown(wait=True)
+                    logger.info("Shutdown server")
+                    break
 
     def handle_check_hash(self, hashcode: str):
         """
