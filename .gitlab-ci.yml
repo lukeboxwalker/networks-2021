@@ -1,17 +1,19 @@
 image: "python:3.7"
 
-#commands to run in the Docker container before starting each job.
 before_script:
   - python --version
   - pip install -r requirements.txt
 
-# different stages in the pipeline
 stages:
   - Static Analysis
   - Test
 
-#defines the job in Static Analysis
 pylint:
   stage: Static Analysis
   script:
   - pylint src/
+
+pytest:
+  stage: Test
+  script:
+  - cd test/;pytest -v
