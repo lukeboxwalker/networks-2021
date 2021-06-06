@@ -2,7 +2,7 @@
 Module to start server.
 """
 
-from web import Server
+from src.web import Server
 
 if __name__ == '__main__':
     HOST = "localhost"

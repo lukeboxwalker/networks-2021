@@ -10,7 +10,7 @@ import zlib
 
 from os import path
 from typing import List
-from exceptions import BlockInsertionError, BlockSectionInconsistentError
+from src.exceptions import BlockInsertionError, BlockSectionInconsistentError
 
 # Chunk size for the data a single Block is holding.
 # Size is defined by project specification.

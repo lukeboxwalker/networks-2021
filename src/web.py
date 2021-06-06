@@ -6,10 +6,10 @@ import threading
 
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import List, Tuple
-from data import BlockChain, BlockCMD, load_file, generate_hash
-from exceptions import BlockSectionInconsistentError, BlockInsertionError
-from logger import logger, LogLevel
-from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
+from src.data import BlockChain, BlockCMD, load_file, generate_hash
+from src.exceptions import BlockSectionInconsistentError, BlockInsertionError
+from src.logger import logger, LogLevel
+from src.package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
 
 BUFF_SIZE = 1024
 

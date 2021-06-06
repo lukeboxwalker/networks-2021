@@ -1,34 +1,17 @@
-pylint:
-  stage: test
-  image: python:3.7
-  before_script:
-    - mkdir -p public/badges public/lint
-    - echo undefined > public/badges/$CI_JOB_NAME.score
-    - pip install pylint-gitlab
-  script:
-    - pylint --exit-zero --output-format=text $(find -type f -name "*.py" ! -path "**/.venv/**") | tee /tmp/pylint.txt
-    - sed -n 's/^Your code has been rated at \([-0-9.]*\)\/.*/\1/p' /tmp/pylint.txt > public/badges/$CI_JOB_NAME.score
-    - pylint --exit-zero --output-format=pylint_gitlab.GitlabCodeClimateReporter $(find -type f -name "*.py" ! -path "**/.venv/**") > codeclimate.json
-    - pylint --exit-zero --output-format=pylint_gitlab.GitlabPagesHtmlReporter $(find -type f -name "*.py" ! -path "**/.venv/**") > public/lint/index.html
-  after_script:
-    - anybadge --overwrite --label $CI_JOB_NAME --value=$(cat public/badges/$CI_JOB_NAME.score) --file=public/badges/$CI_JOB_NAME.svg 4=red 6=orange 8=yellow 10=green
-    - |
-      echo "Your score is: $(cat public/badges/$CI_JOB_NAME.score)"
-  artifacts:
-    paths:
-      - public
-    reports:
-      codequality: codeclimate.json
-    when: always
+image: "python:3.7"
 
-pages:
-  stage: deploy
-  image: alpine:latest
+#commands to run in the Docker container before starting each job.
+before_script:
+  - python --version
+  - pip install -r requirements.txt
+
+# different stages in the pipeline
+stages:
+  - Static Analysis
+  - Test
+
+#defines the job in Static Analysis
+pylint:
+  stage: Static Analysis
   script:
-    - echo
-  artifacts:
-    paths:
-      - public
-  only:
-    refs:
-      - master
+  - pylint src/

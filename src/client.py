@@ -3,7 +3,7 @@ Module to start client.
 """
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from web import Client
+from src.web import Client
 
 if __name__ == '__main__':
     HOST = "localhost"

@@ -5,8 +5,8 @@ Module that holds the classes and functions needed for TCP package communication
 import pickle
 from typing import Callable, Dict
 from enum import IntEnum
-from exceptions import PackageCreationError, PackageHandleError
-from logger import LogResult, LogLevel, logger
+from src.exceptions import PackageCreationError, PackageHandleError
+from src.logger import LogResult, LogLevel, logger
 
 
 class PackageMode(IntEnum):
