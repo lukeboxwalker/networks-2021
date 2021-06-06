@@ -26,8 +26,6 @@ pyinstaller:
   script:
   - pip install pyinstaller
   - pyinstaller -F src/server.py
-  tags:
-  - deploy
   artifacts:
     paths:
       - dist/*.exe
