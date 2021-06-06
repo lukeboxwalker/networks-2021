@@ -11,9 +11,22 @@ stages:
 pylint:
   stage: Static Analysis
   script:
+  - pip install pylint
   - pylint src/
 
 pytest:
   stage: Test
   script:
+  - pip install pytest
   - cd test/;pytest -v
+
+pyinstaller:
+  stage: Deploy
+  script:
+  - pip install pyinstaller
+  - pyinstaller -F src/server.py
+  tags:
+  - deploy
+  artifacts:
+    paths:
+      - dist/*.exe
