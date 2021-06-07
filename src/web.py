@@ -5,6 +5,7 @@ import socket
 import threading
 
 from concurrent.futures.thread import ThreadPoolExecutor
+from contextlib import closing
 from typing import List, Tuple
 from data import BlockChain, BlockCMD, load_file, generate_hash
 from exceptions import BlockSectionInconsistentError, BlockInsertionError
@@ -115,8 +116,8 @@ class Server:
         self.address = (host, port)
         self.block_chain = BlockChain()
 
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        self.server_socket.bind(self.address)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        self.sock.bind(self.address)
 
         self.thread = None
         self.stopped = threading.Event()
@@ -148,20 +149,21 @@ class Server:
         """
 
         logger.info("Starting server")
-        self.server_socket.listen()
+        self.sock.listen()
         host = self.address[0]
         port = self.address[1]
         logger.info("Server started listening to " + host + ":" + str(port))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             while True:
-                sock, addr = self.server_socket.accept()
+                sock, addr = self.sock.accept()
                 if self.stopped.isSet():
+                    sock.close()
                     executor.shutdown(wait=True)
                     logger.info("Shutdown server")
                     break
                 executor.submit(self.__handle_client, sock, addr)
-        self.server_socket.close()
+        self.sock.close()
 
     def start(self,  max_workers: int = 1):
         """
@@ -180,8 +182,8 @@ class Server:
         if self.thread and self.thread.is_alive():
             self.stopped.set()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-            sock.connect(self.address)
-            self.thread.join()
+            with closing(sock):
+                sock.connect(self.address)
 
     def handle_check_hash(self, hashcode: str):
         """
