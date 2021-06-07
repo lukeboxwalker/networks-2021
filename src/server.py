@@ -7,6 +7,11 @@ from web import Server
 
 
 def wait_on_interrupt(callback: Callable):
+    """
+    Waits for a user input to call the given callback.
+
+    :param callback: the callback to call in case of a user input.
+    """
     try:
         input()
     except KeyboardInterrupt:

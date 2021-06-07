@@ -112,14 +112,14 @@ class Server:
     """
 
     def __init__(self, host: str, port: int):
-        self.host = host
-        self.port = port
+        self.address = (host, port)
         self.block_chain = BlockChain()
 
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        self.server_socket.bind((self.host, self.port))
+        self.server_socket.bind(self.address)
 
         self.thread = None
+        self.stopped = threading.Event()
 
         # create PackageFactory in CLIENT_MODE (creates packages that only a client accepts)
         # create PackageHandler in SERVER_MODE (can only handle packages directed to a server)
@@ -149,17 +149,19 @@ class Server:
 
         logger.info("Starting server")
         self.server_socket.listen()
-        logger.info("Server started listening to " + self.host + ":" + str(self.port))
+        host = self.address[0]
+        port = self.address[1]
+        logger.info("Server started listening to " + host + ":" + str(port))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             while True:
-                try:
-                    sock, addr = self.server_socket.accept()
-                    executor.submit(self.__handle_client, sock, addr)
-                except OSError:
+                sock, addr = self.server_socket.accept()
+                if self.stopped.isSet():
                     executor.shutdown(wait=True)
                     logger.info("Shutdown server")
                     break
+                executor.submit(self.__handle_client, sock, addr)
+        self.server_socket.close()
 
     def start(self,  max_workers: int = 1):
         """
@@ -176,7 +178,9 @@ class Server:
         Stops the server if it is running and joins the server thread until it is finished.
         """
         if self.thread and self.thread.is_alive():
-            self.server_socket.close()
+            self.stopped.set()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+            sock.connect(self.address)
             self.thread.join()
 
     def handle_check_hash(self, hashcode: str):
