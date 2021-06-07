@@ -7,6 +7,7 @@ before_script:
 stages:
   - Static Analysis
   - Test
+  - Build
 
 pylint:
   stage: Static Analysis
@@ -19,3 +20,12 @@ pytest:
   script:
   - pip install pytest
   - cd test/;pytest -v
+
+pyinstaller:
+  stage: Build
+  script:
+  - pip install pyinstaller
+  - pyinstaller -F -y src/server.py
+  artifacts:
+    paths:
+      - dist/server.exe
