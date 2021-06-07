@@ -6,9 +6,9 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from web import Client
 
 if __name__ == '__main__':
-    HOST = "localhost"
+    IP = "localhost"
     PORT = 10005
-    client = Client(HOST, PORT)
+    client = Client(IP, PORT)
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         executor.submit(client.add_file, "data.py")

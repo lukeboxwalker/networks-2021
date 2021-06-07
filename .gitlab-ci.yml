@@ -28,4 +28,4 @@ pyinstaller:
   - pyinstaller -F -y src/server.py
   artifacts:
     paths:
-      - dist/server.exe
+      - dist/server

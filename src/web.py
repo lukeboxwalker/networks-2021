@@ -148,7 +148,7 @@ class Server:
         :param max_workers: number of worker threads that will handle the client communication.
         """
 
-        logger.info("Starting server")
+        logger.info("Starting server...")
         self.sock.listen()
         host = self.address[0]
         port = self.address[1]
@@ -159,21 +159,29 @@ class Server:
                 sock, addr = self.sock.accept()
                 if self.stopped.isSet():
                     sock.close()
+                    logger.info("Shutdown server...")
                     executor.shutdown(wait=True)
-                    logger.info("Shutdown server")
                     break
                 executor.submit(self.__handle_client, sock, addr)
         self.sock.close()
+        logger.info("Shutdown complete")
 
     def start(self,  max_workers: int = 1):
         """
-        Start the server in its own thread.
+        Start the server in its own thread. Blocking the Main Thread until user KeyboardInterrupt
+        the process.
 
         :param max_workers: number of worker threads that will handle the client communication.
         """
         name = "ServerThread"
         self.thread = threading.Thread(target=self.__start, args=(max_workers,), name=name)
         self.thread.start()
+        try:
+            input()
+        except KeyboardInterrupt:
+            pass
+        logger.info("KeyboardInterrupt start server shutdown")
+        self.stop()
 
     def stop(self):
         """
