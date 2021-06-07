@@ -21,11 +21,11 @@ pytest:
   - pip install pytest
   - cd test/;pytest -v
 
-pyinstaller:
-  stage: Build
-  script:
-  - pip install pyinstaller
-  - pyinstaller -F -y src/server.py
-  artifacts:
-    paths:
-      - dist/server
+#pyinstaller:
+#  stage: Build
+#  script:
+#  - pip install pyinstaller
+#  - pyinstaller -F -y src/server.py
+#  artifacts:
+#    paths:
+#      - dist/server
