@@ -7,7 +7,7 @@ import threading
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import closing
 from typing import List, Tuple
-from data import BlockChain, BlockCMD, load_file, generate_hash
+from data import BlockChain, BlockCMD, load_file, generate_file_hash
 from exceptions import BlockSectionInconsistentError, BlockInsertionError
 from logger import logger, LogLevel
 from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
@@ -202,16 +202,12 @@ class Server:
         :return: package to send back to the client.
         """
 
-        if not self.block_chain.contains(hashcode):
-            message = "Invalid hash to check '" + hashcode + "' does not exist"
-            return self.package_factory.create_log_package(LogLevel.WARNING, message)
-
-        if self.block_chain.check(hashcode):
-            message = "Checking '" + hashcode + "' resolves in a consistent BlockChain"
+        if self.block_chain.file_exists(hashcode):
+            message = "File with hash '" + hashcode + "' is stored in the BlockChain"
             return self.package_factory.create_log_package(LogLevel.INFO, message)
 
-        message = "Checking '" + hashcode + "' resolves in an inconsistent BlockChain"
-        return self.package_factory.create_log_package(LogLevel.ERROR, message)
+        message = "File with hash '" + hashcode + "' is not stored in the BlockChain"
+        return self.package_factory.create_log_package(LogLevel.WARNING, message)
 
     def handle_check_file(self, blocks: List[BlockCMD]):
         """
@@ -223,7 +219,8 @@ class Server:
         """
 
         try:
-            hashcode = generate_hash(blocks)
+            hashcode = generate_file_hash(blocks)
+            logger.info("Check file with hash '" + hashcode + "'")
         except BlockSectionInconsistentError as error:
             message = "Error while generating hash for file: " + str(error)
             return self.package_factory.create_log_package(LogLevel.WARNING, message)
@@ -237,14 +234,19 @@ class Server:
         :param blocks: to add to BlockChain.
         :return: package to send back to the client.
         """
+        if not blocks:
+            message = "No blocks to add!"
+            return self.package_factory.create_log_package(LogLevel.WARNING, message)
 
         try:
-            hashcode = self.block_chain.add(blocks)
+            for block in blocks:
+                hashcode = self.block_chain.add(block)
+                logger.info("Added block with hash '" + hashcode + "' from file '" + block.filename)
         except (BlockInsertionError, BlockSectionInconsistentError) as error:
             message = "Error while adding Blocks to the BlockChain: " + str(error)
             return self.package_factory.create_log_package(LogLevel.WARNING, message)
 
-        message = "Added blocks with hash '" + hashcode + "'"
+        message = "Added file '" + blocks[0].filename + "' with hash '" + blocks[0].hash + "'"
         return self.package_factory.create_log_package(LogLevel.INFO, message)
 
     def handle_request_file(self, hashcode: str):
@@ -256,12 +258,13 @@ class Server:
         :return: package to send back to the client containing the file.
         """
 
-        logger.info("Loading data for file '" + hashcode + "'")
+        logger.info("Loading data for file with hash '" + hashcode + "'")
         blocks = self.block_chain.get(hashcode)
 
         cmd_blocks = []
         for block in blocks:
-            cmd_blocks.append(BlockCMD(block.index_all, block.ordinal, block.chunk, block.filename))
+            cmd = BlockCMD(block.hash, block.index_all, block.ordinal, block.chunk, block.filename)
+            cmd_blocks.append(cmd)
 
         if cmd_blocks:
             logger.info("Sending " + str(len(cmd_blocks)) + " Block(s) to the client")
@@ -321,6 +324,6 @@ def handle_get_file(blocks: List[BlockCMD]):
     blocks.sort(key=lambda x: x.ordinal)
 
     # write to file in binary mode
-    with open(blocks[0].filename, "wb") as file:
+    with open("test" + blocks[0].filename, "wb") as file:
         for block in blocks:
             file.write(block.chunk)

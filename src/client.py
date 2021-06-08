@@ -16,4 +16,3 @@ if __name__ == '__main__':
         executor.submit(client.add_file, "logger.py")
         executor.submit(client.add_file, "package.py")
         executor.submit(client.add_file, "server.py")
-        executor.submit(client.add_file, "client.py")

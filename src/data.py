@@ -25,11 +25,22 @@ class BlockCMD:
     should determine there values in the real stored Block.
     """
 
-    def __init__(self, index_all: int, ordinal: int, chunk: bytes, filename: str):
+    # Disable too many arguments. Doesnt make much sense to group the variables instead.
+    # pylint: disable=too-many-arguments
+    def __init__(self, hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str):
+        self.__hashcode = hashcode
         self.__index_all = index_all
         self.__ordinal = ordinal
         self.__filename = filename
         self.__chunk = chunk
+
+    @property
+    def hash(self) -> str:
+        """
+        Property function to ensure that the hash is a read only variable.
+        :return: the hash value of the file as a string.
+        """
+        return self.__hashcode
 
     @property
     def index_all(self) -> int:
@@ -75,8 +86,8 @@ class Block:
     Class that represents a Block in a BlockChain.
     """
 
-    def __init__(self, hashcode: str, hash_previous: str, block_cmd: BlockCMD):
-        self.__hashcode = hashcode
+    def __init__(self, hash_previous: str, block_cmd: BlockCMD):
+        self.__hashcode = block_cmd.hash
         self.__index_all = block_cmd.index_all
         self.__ordinal = block_cmd.ordinal
         self.__filename = block_cmd.filename
@@ -147,51 +158,48 @@ class BlockChain:
 
     def __init__(self):
         self.__chain: FileDictionary = FileDictionary()
-        self.__lock = threading.Lock()
+        self.__lock = threading.Lock()  # lock to ensures adding as an atomic operation
 
-    def contains(self, hashcode: str) -> bool:
+    def __get_blocks_for_file(self, hashcode: str) -> List[Block]:
         """
-        Checks if there are Blocks in the BlockChain which match the given hash.
-        Method performs a thread safe action on the BlockChain by acquiring a lock.
+        Collects all blocks that correspond to the given file hash.
+        Method performs a thread safe action on the BlockChain no explicit locking needed.
 
-        :param hashcode: the hashcode to check
-        :return: if the file for the given hash is already stored in the BlockChain.
+        :param hashcode: the hashcode to collect blocks for.
+        :return: list of blocks with given hash.
         """
-        with self.__lock:
-            return self.__chain.contains(hashcode)
+        head = self.__chain.get_head()  # thread safe get_head() is using a lock
+        if head is None:
+            return []
+        block = self.__chain.get(head)  # thread safe block can only be read
+        blocks = []
 
-    def check(self, hashcode: str) -> bool:
+        while block is not None:
+            if block.hash == hashcode:
+                blocks.append(block)
+
+                if block.index_all == len(blocks):
+                    break
+
+            block = self.__chain.get(block.hash_previous)  # thread safe block can only be read
+        return blocks
+
+    def file_exists(self, hashcode: str) -> bool:
         """
-        Checks if the BlockChain is consistent up upon the given hash.
-        Method performs a thread safe action on the BlockChain by acquiring a lock.
+        Checks if the given hash representing a file exists in the BlockChain.
+        Method performs a thread safe action on the BlockChain no explicit locking needed.
 
         :param hashcode: the hashcode to check
         :return: if the whole BlockChain consistent from the given hash.
         """
 
-        def check_hash(file_hash: str) -> bool:
-            # Checks if the hash is in the BlockChain at all
-            if not self.__chain.contains(file_hash):
-                return False
+        blocks = self.__get_blocks_for_file(hashcode)
+        try:
+            return generate_file_hash(blocks) == hashcode
+        except BlockSectionInconsistentError:
+            return False
 
-            # Fetching Blocks that represent the file of the hash
-            blocks = self.__chain.get(file_hash)
-            block = blocks[0]
-
-            # Check if all Blocks needed for the file are present
-            if block.index_all != len(blocks):
-                return False
-
-            # Check the previous Block by checking the hash previous until
-            # the start of the chain is reached
-            if block.hash_previous is not None:
-                return check_hash(block.hash_previous)
-            return True
-
-        with self.__lock:
-            return check_hash(hashcode)
-
-    def add(self, blocks: List[BlockCMD]) -> str:
+    def add(self, block: BlockCMD) -> str:
         """
         Adds a new Block to the BlockChain.
         Method performs a thread safe action on the BlockChain by acquiring a lock.
@@ -199,33 +207,23 @@ class BlockChain:
         Creates a new section of Blocks for a new file or add a Block to an existing
         Block section in the BlockChain.
 
-        :param blocks: the blocks to insert into the BlockChain.
-        :raises BlockInsertionError: when the File the new Blocks are representing are already
-        part of the BlockChain.
+        :param block: the block to insert into the BlockChain.
         """
-        with self.__lock:
-            if not blocks:
-                raise BlockInsertionError("There are no Blocks to insert!")
 
-            hashcode = generate_hash(blocks)
-
-            if self.__chain.contains(hashcode):
-                raise BlockInsertionError("File already exists!")
-
-            hash_previous = self.__chain.get_head()
-            self.__chain.set(hashcode, [Block(hashcode, hash_previous, block) for block in blocks])
-            self.__chain.update_head(hashcode)
-
+        with self.__lock:  # ensures atomic operation
+            hash_previous = self.__chain.get_head()  # thread safe get_head() is using a lock
+            hashcode = self.__chain.add(Block(hash_previous, block))
+            self.__chain.update_head(hashcode)  # thread safe update_head() is using a lock
             return hashcode
 
     def get(self, hashcode: str) -> List[Block]:
         """
         Gets the Blocks from the BlockChain with given hashcode.
+        Method performs a thread safe action on the BlockChain no explicit locking needed.
 
         :return: list of Blocks for the given file hash. List is empty if the hash does not exist.
         """
-        with self.__lock:
-            return self.__chain.get(hashcode)
+        return self.__get_blocks_for_file(hashcode)
 
 
 class FileDictionary:
@@ -249,6 +247,7 @@ class FileDictionary:
 
     def __init__(self):
         self.root = os.getcwd() + "/.blockchain"
+        self.__head_lock = threading.Lock()  # lock to ensures read write head is thread safe
 
         # creating root dir if not exists
         if not path.exists(self.root):
@@ -270,7 +269,7 @@ class FileDictionary:
 
         :param hashcode: the file hash
         """
-        if not self.contains(hashcode):
+        if not path.isdir(self.root + "/" + hashcode[:2]):
             os.mkdir(self.root + "/" + hashcode[:2])
 
     def get_head(self):
@@ -279,10 +278,11 @@ class FileDictionary:
 
         :return: the head or current 'hash previous', returns None if file does not exists.
         """
-        if not path.isfile(self.head):
-            return None
-        with open(self.head, "r") as file:
-            return file.readline()
+        with self.__head_lock:
+            if not path.isfile(self.head):
+                return None
+            with open(self.head, "r") as file:
+                return file.readline()
 
     def update_head(self, hashcode: str):
         """
@@ -290,49 +290,73 @@ class FileDictionary:
 
         :param hashcode: hash to update head with.
         """
-        with open(self.head, "w") as file:
-            file.write(hashcode)
+        with self.__head_lock:
+            with open(self.head, "w") as file:
+                file.write(hashcode)
 
-    def contains(self, hashcode: str) -> bool:
+    def contains(self, block: Block) -> bool:
         """
-        Checks if the file path for the given hashcode exists. Decompresses the byte array
-        stored to the file with zlib.
+        Checks if the file path for the given hashcode of the block exists.
 
-        :param hashcode: hash to check.
-        :return: if the hash is part of the BlockChain.
+        :param block: the block to check.
+        :return: if the block is part of the BlockChain.
         """
+        hashcode = hash_block(block)
         return path.isfile(self.__get_path(hashcode))
 
-    def get(self, hashcode: str) -> List[Block]:
+    def get(self, hashcode: str):
         """
         Loads all Blocks stored for the file hash.
+        Decompresses the byte array stored to the file with zlib.
 
         :param hashcode: hashcode to load Blocks for.
-        :return: the Blocks saved under the given hashcode as a Dict. Where the key is
-        the ordinal of a block.
+        :return: the Block saved under the given hashcode. Returns None if hashcode is None or
+        the file for the hashcode does not exists.
         """
-        if not self.contains(hashcode):
-            return []
+        if not hashcode:
+            return None
 
-        with open(self.__get_path(hashcode), "rb") as file:
-            data = file.read()
-            return pickle.loads(zlib.decompress(data))
+        filepath = self.__get_path(hashcode)
+        if path.isfile(filepath):
+            with open(filepath, "rb") as file:
+                data = file.read()
+                return pickle.loads(zlib.decompress(data))
+        return None
 
-    def set(self, hashcode: str, blocks: List[Block]):
+    def add(self, block: Block) -> str:
         """
-        Stored all given Blocks back to the file. Compresses the byte array stored to the file
+        Stores the given Block back to the file. Compresses the byte array stored to the file
         with zlib.
 
-        :param hashcode: to save Blocks under.
-        :param blocks: to save.
+        :param block: the block to save.
         """
+        hashcode = hash_block(block)
         self.__create_dir_if_not_exists(hashcode)
-        with open(self.__get_path(hashcode), "wb") as file:
-            data = pickle.dumps(blocks)
+
+        filepath = self.__get_path(hashcode)
+        if path.isfile(filepath):
+            raise BlockInsertionError("Block already exists!")
+
+        with open(filepath, "wb") as file:
+            data = pickle.dumps(block)
             file.write(zlib.compress(data))
+            return hashcode
 
 
-def generate_hash(blocks: List[BlockCMD]) -> str:
+def hash_block(block: Block) -> str:
+    """
+    Creating a sha256 hash for the given block.
+    Dumps the pickle byte array of the object into a hash value.
+
+    :param block: to generate hash for.
+    :return: sha256 hash for the block.
+    """
+    sha256 = hashlib.sha256()
+    sha256.update(pickle.dumps(block))
+    return sha256.hexdigest()
+
+
+def generate_file_hash(blocks: List) -> str:
     """
     Generates sha256 hash for given block list. If there is an error within the blocks no hash
     will be generated.
@@ -351,8 +375,13 @@ def generate_hash(blocks: List[BlockCMD]) -> str:
         raise BlockSectionInconsistentError("Duplicate block in section!")
 
     # check if information shared by the blocks is consistent
-    if len({(block.index_all, block.filename) for block in blocks}) != 1:
-        raise BlockSectionInconsistentError("Inconsistent blocks!")
+    hashcode = blocks[0].hash
+    index_all = blocks[0].index_all
+    filename = blocks[0].filename
+
+    for block in blocks:
+        if hashcode != block.hash or index_all != block.index_all or filename != block.filename:
+            raise BlockSectionInconsistentError("Inconsistent blocks!")
 
     # sort blocks in order to always generate the correct hash
     blocks.sort(key=lambda x: x.ordinal)
@@ -373,6 +402,7 @@ def load_file(filepath: str) -> List[BlockCMD]:
     """
     filename: str = os.path.split(filepath)[1]
     chunks: List[bytes] = []
+    sha256 = hashlib.sha256()
 
     # reading the file in binary mode
     with open(filepath, "rb") as file:
@@ -381,5 +411,11 @@ def load_file(filepath: str) -> List[BlockCMD]:
             if not chunk:
                 break
             chunks.append(chunk)
+            sha256.update(chunk)
     index_all = len(chunks)
-    return [BlockCMD(index_all, ordinal, chunks[ordinal], filename) for ordinal in range(index_all)]
+    hashcode = sha256.hexdigest()
+
+    blocks = []
+    for ordinal, chunk in enumerate(chunks):
+        blocks.append(BlockCMD(hashcode, index_all, ordinal, chunk, filename))
+    return blocks
