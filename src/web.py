@@ -34,6 +34,10 @@ class Client:
         self.package_handler.install(PackageId.LOG_TEXT, logger.log)
         self.package_handler.install(PackageId.SEND_FILE, handle_get_file)
 
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        logger.info("Connecting to server " + str(self.host) + ":" + str(self.port))
+        self.sock.connect((self.host, self.port))
+
     def __send_hash(self, package_id: PackageId, hashcode: str):
         """
         Sends a hash to the server with given package id.
@@ -41,16 +45,11 @@ class Client:
         :param package_id: package id for the package that will be send.
         :param hashcode: to send to server.
         """
-        logger.info("Connecting to server " + str(self.host) + ":" + str(self.port))
-        client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        client_sock.connect((self.host, self.port))
-
         package = self.package_factory.create_from_object(package_id, hashcode)
 
-        send(package, client_sock)
-        read(self.package_handler, client_sock)
-
-        client_sock.close()
+        logger.info("Sending hash '" + hashcode + "' to the server")
+        send(package, self.sock)
+        read(self.package_handler, self.sock)
 
     def __send_file(self, package_id: PackageId, blocks: List[BlockCMD]):
         """
@@ -59,17 +58,17 @@ class Client:
         :param package_id: package id for the package that will be send.
         :param blocks: the blocks of a file to send.
         """
-        logger.info("Connecting to server " + str(self.host) + ":" + str(self.port))
-        client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        client_sock.connect((self.host, self.port))
-
         package = self.package_factory.create_from_object(package_id, blocks)
 
         logger.info("Sending " + str(len(blocks)) + " Block(s) to the server")
-        send(package, client_sock)
-        read(self.package_handler, client_sock)
+        send(package, self.sock)
+        read(self.package_handler, self.sock)
 
-        client_sock.close()
+    def close(self):
+        """
+        Closes the socket.
+        """
+        self.sock.close()
 
     def get_file(self, hashcode: str):
         """
@@ -133,11 +132,15 @@ class Server:
         self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
         self.package_handler.install(PackageId.GET_FILE, self.handle_request_file)
 
-    def __handle_client(self, sock: socket, addr: Tuple):
+    def __handle_client(self, sock: socket.socket, addr: Tuple):
         logger.info("Incoming connection from: " + str(addr[0]) + ":" + str(addr[1]))
-        read(self.package_handler, sock)
-        sock.close()
-        logger.info("Closed connection with: " + str(addr[0]) + ":" + str(addr[1]))
+        with sock:
+            while True:
+                logger.info("Wait for client: " + str(addr[0]) + ":" + str(addr[1])
+                            + " to receive data")
+                if read(self.package_handler, sock):
+                    break
+        logger.info("Connection closed by: " + str(addr[0]) + ":" + str(addr[1]))
 
     def __start(self, max_workers: int = 1):
         """
@@ -274,40 +277,44 @@ class Server:
         return self.package_factory.create_from_object(PackageId.SEND_FILE, cmd_blocks)
 
 
-def read(package_handler: PackageHandler, sock: socket):
+def read(package_handler: PackageHandler, sock: socket.socket) -> bool:
     """
     Reading data from given socket. Handles the incoming package by given PackageHandler
     and sends a package back.
 
     :param package_handler: to handle incoming packages.
     :param sock: the socket to communicate to.
+    :return: if client closed the connection.
     """
 
-    byte_buffer = bytearray()
-    while True:
-        chunk = sock.recv(BUFF_SIZE)
-        byte_buffer += chunk
-        if len(chunk) < BUFF_SIZE:
-            break
+    buf = sock.recv(4)
+    if not buf:
+        return True
+    package_size = int.from_bytes(buf, byteorder="big")
+    byte_package = sock.recv(package_size)
 
-    out_package = package_handler.handle(byte_buffer)
+    out_package = package_handler.handle(byte_package)
 
     # if out package is not None send it back.
     if out_package:
         send(out_package, sock)
 
+    return False
 
-def send(package: Package, sock: socket):
+
+def send(package: Package, sock: socket.socket):
     """
     Sends a package to the given socket.
 
     :param package: the package to send.
     :param sock: the socket to write to.
     """
-
-    data = package.raw
-    for i in range(0, len(data), BUFF_SIZE):
-        sock.send(data[i:i + BUFF_SIZE])
+    try:
+        size = len(package.raw)
+        logger.info("Send package with size: " + str(size))
+        sock.sendall(size.to_bytes(4, byteorder="big") + package.raw)
+    except OverflowError:
+        logger.error("Can't send package. Package size to large!")
 
 
 def handle_get_file(blocks: List[BlockCMD]):

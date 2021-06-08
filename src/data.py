@@ -230,8 +230,8 @@ class FileDictionary:
     """
     Class that stores the BlockChain in the filesystem in a 'git like' way.
 
-    All Blocks of a file are stored in a single file. For example the
-    file hash: 4c19f36a2221b34b4837b05a72bbf21f1ca65d61aca1c221dd41e77979a08d73 is
+    A Block of a file is stored in a file named by its hash. For example the
+    block with hash: 4c19f36a2221b34b4837b05a72bbf21f1ca65d61aca1c221dd41e77979a08d73 is
     resulting in a structure like:
 
     /.blockchain
