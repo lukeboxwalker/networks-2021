@@ -12,7 +12,7 @@ from exceptions import BlockSectionInconsistentError, BlockInsertionError
 from logger import logger, LogLevel
 from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
 
-BUFF_SIZE = 1024
+MAX_PACKAGE_SIZE = 2  # 2 bytes or 0xFFFF or 65535
 
 
 class Client:
@@ -58,11 +58,13 @@ class Client:
         :param package_id: package id for the package that will be send.
         :param blocks: the blocks of a file to send.
         """
-        package = self.package_factory.create_from_object(package_id, blocks)
 
         logger.info("Sending " + str(len(blocks)) + " Block(s) to the server")
-        send(package, self.sock)
-        read(self.package_handler, self.sock)
+        for block in blocks:
+            package = self.package_factory.create_from_object(package_id, block)
+            send(package, self.sock)
+            read(self.package_handler, self.sock)
+        logger.info("Done")
 
     def close(self):
         """
@@ -93,7 +95,8 @@ class Client:
 
         :param filepath: to the file to send to server and check.
         """
-        self.__send_file(PackageId.FILE_CHECK, load_file(filepath))
+        blocks = load_file(filepath)
+        self.__send_hash(PackageId.HASH_CHECK, generate_file_hash(blocks))
 
     def add_file(self, filepath: str):
         """
@@ -127,9 +130,9 @@ class Server:
         self.package_handler = PackageHandler(PackageMode.SERVER_MODE, self.package_factory)
 
         # install package handlers for incoming packages
-        self.package_handler.install(PackageId.SEND_FILE, self.handle_add_file)
+        self.package_handler.install(PackageId.SEND_FILE, self.handle_add_block)
         self.package_handler.install(PackageId.HASH_CHECK, self.handle_check_hash)
-        self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
+        # self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
         self.package_handler.install(PackageId.GET_FILE, self.handle_request_file)
 
     def __handle_client(self, sock: socket.socket, addr: Tuple):
@@ -212,45 +215,42 @@ class Server:
         message = "File with hash '" + hashcode + "' is not stored in the BlockChain"
         return self.package_factory.create_log_package(LogLevel.WARNING, message)
 
-    def handle_check_file(self, blocks: List[BlockCMD]):
-        """
-        Checks the blocks of a file in the BlockChain. Checks if the file with given blocks
-        exists and if the BlockChain is consistent.
+    # def handle_check_file(self, blocks: List[BlockCMD]):
+    #     """
+    #     Checks the blocks of a file in the BlockChain. Checks if the file with given blocks
+    #     exists and if the BlockChain is consistent.
+    #
+    #     :param blocks: the blocks of a file to check.
+    #     :return: package to send back to the client.
+    #     """
+    #
+    #     try:
+    #         hashcode = generate_file_hash(blocks)
+    #         logger.info("Check file with hash '" + hashcode + "'")
+    #     except BlockSectionInconsistentError as error:
+    #         message = "Error while generating hash for file: " + str(error)
+    #         return self.package_factory.create_log_package(LogLevel.WARNING, message)
+    #
+    #     return self.handle_check_hash(hashcode)
 
-        :param blocks: the blocks of a file to check.
+    def handle_add_block(self, block: BlockCMD):
+        """
+        Adding a new block to the BlockChain.
+
+        :param block: the block to add to the BlockChain.
         :return: package to send back to the client.
         """
-
-        try:
-            hashcode = generate_file_hash(blocks)
-            logger.info("Check file with hash '" + hashcode + "'")
-        except BlockSectionInconsistentError as error:
-            message = "Error while generating hash for file: " + str(error)
-            return self.package_factory.create_log_package(LogLevel.WARNING, message)
-
-        return self.handle_check_hash(hashcode)
-
-    def handle_add_file(self, blocks: List[BlockCMD]):
-        """
-        Adding a new file with given blocks to the BlockChain.
-
-        :param blocks: to add to BlockChain.
-        :return: package to send back to the client.
-        """
-        if not blocks:
-            message = "No blocks to add!"
+        if not block:
+            message = "No block to add!"
             return self.package_factory.create_log_package(LogLevel.WARNING, message)
 
         try:
-            for block in blocks:
-                hashcode = self.block_chain.add(block)
-                logger.info("Added block with hash '" + hashcode + "' from file '" + block.filename)
+            hashcode = self.block_chain.add(block)
+            message = "Added block with hash '" + hashcode + "' from file '" + block.filename
+            return self.package_factory.create_log_package(LogLevel.INFO, message)
         except (BlockInsertionError, BlockSectionInconsistentError) as error:
             message = "Error while adding Blocks to the BlockChain: " + str(error)
-            return self.package_factory.create_log_package(LogLevel.WARNING, message)
-
-        message = "Added file '" + blocks[0].filename + "' with hash '" + blocks[0].hash + "'"
-        return self.package_factory.create_log_package(LogLevel.INFO, message)
+            return self.package_factory.create_log_package(LogLevel.ERROR, message)
 
     def handle_request_file(self, hashcode: str):
         """
@@ -287,7 +287,7 @@ def read(package_handler: PackageHandler, sock: socket.socket) -> bool:
     :return: if client closed the connection.
     """
 
-    buf = sock.recv(4)
+    buf = sock.recv(MAX_PACKAGE_SIZE)
     if not buf:
         return True
     package_size = int.from_bytes(buf, byteorder="big")
@@ -311,8 +311,8 @@ def send(package: Package, sock: socket.socket):
     """
     try:
         size = len(package.raw)
-        logger.info("Send package with size: " + str(size))
-        sock.sendall(size.to_bytes(4, byteorder="big") + package.raw)
+        logger.info("Sending package with size: " + str(size))
+        sock.sendall(size.to_bytes(MAX_PACKAGE_SIZE, byteorder="big") + package.raw)
     except OverflowError:
         logger.error("Can't send package. Package size to large!")
 

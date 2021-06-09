@@ -14,6 +14,8 @@ from exceptions import BlockInsertionError, BlockSectionInconsistentError
 
 # Chunk size for the data a single Block is holding.
 # Size is defined by project specification.
+from logger import logger
+
 CHUNK_SIZE = 500
 
 
@@ -148,6 +150,19 @@ class Block:
         :return: the hash of the previous Block in the BlockChain as a string.
         """
         return self.__hash_previous
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Block):
+            return False
+        return (self.hash == other.hash and
+                self.index_all == other.index_all and
+                self.ordinal == other.ordinal and
+                self.chunk == other.chunk and
+                self.filename == other.filename)
+
+    def __hash__(self) -> int:
+        values = frozenset((self.hash, self.index_all, self.ordinal, self.chunk, self.__filename))
+        return hash(values)
 
 
 class BlockChain:
@@ -352,7 +367,12 @@ def hash_block(block: Block) -> str:
     :return: sha256 hash for the block.
     """
     sha256 = hashlib.sha256()
-    sha256.update(pickle.dumps(block))
+
+    hashcode = hash(block)
+    bits = hashcode.bit_length()
+    bits += 8 - ((bits % 8) or 8)
+
+    sha256.update(hashcode.to_bytes(bits // 8, byteorder="big", signed=True))
     return sha256.hexdigest()
 
 
@@ -414,6 +434,7 @@ def load_file(filepath: str) -> List[BlockCMD]:
             sha256.update(chunk)
     index_all = len(chunks)
     hashcode = sha256.hexdigest()
+    logger.info("Loading file '" + filename + "' with hash '" + hashcode + "'")
 
     blocks = []
     for ordinal, chunk in enumerate(chunks):
