@@ -1,29 +1,24 @@
 """
 Module to start client.
 """
-from concurrent.futures.thread import ThreadPoolExecutor
-from contextlib import closing
+import argparse
 
 from web import Client
 
-IP = "localhost"
-PORT = 10005
-
-
-def send_and_check(filepath):
-    """
-    Starts a client and adds a file to the server. Then checks if the file exists on the server.
-    :param filepath: to add/check
-    """
-    with closing(Client(IP, PORT)) as client:
-        client.add_file(filepath)
-        client.check_file(filepath)
-
 
 if __name__ == '__main__':
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        executor.submit(send_and_check, "data.py")
-        executor.submit(send_and_check, "web.py")
-        executor.submit(send_and_check, "package.py")
-        executor.submit(send_and_check, "logger.py")
-        executor.submit(send_and_check, "server.py")
+    parser = argparse.ArgumentParser(description='BlockChain server.')
+    parser.add_argument('--ip', type=str, help='The ip to connect to', required=True)
+    parser.add_argument('--port', type=int, help='The server port to connect to', required=True)
+
+    # parsing args
+    args = parser.parse_args()
+
+    client = Client(args.ip, args.port)
+
+    # pylint: disable=fixme
+    # TODO implement interactive cli commands
+    client.add_file("data.py")
+    client.check_file("data.py")
+
+    client.close()
