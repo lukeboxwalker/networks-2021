@@ -1,10 +1,11 @@
 """
 Module that holds the classes and functions needed for the client server communication.
 """
+import os
 import socket
 import threading
+from threading import Thread
 
-from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import closing
 from typing import List, Tuple
 from data import BlockChain, BlockCMD, load_file, generate_file_hash
@@ -64,7 +65,7 @@ class Client:
             package = self.package_factory.create_from_object(package_id, block)
             send(package, self.sock)
             read(self.package_handler, self.sock)
-        logger.info("Done")
+        logger.info("Done sending file with hash '" + blocks[0].hash + "'")
 
     def close(self):
         """
@@ -105,7 +106,10 @@ class Client:
 
         :param filepath: to the file to send to server.
         """
-        self.__send_file(PackageId.SEND_FILE, load_file(filepath))
+        if os.path.isfile(filepath):
+            self.__send_file(PackageId.SEND_FILE, load_file(filepath))
+        else:
+            logger.error("The file '" + filepath + "' does not exist!")
 
 
 class Server:
@@ -137,21 +141,20 @@ class Server:
 
     def __handle_client(self, sock: socket.socket, addr: Tuple):
         logger.info("Incoming connection from: " + str(addr[0]) + ":" + str(addr[1]))
-        with sock:
-            while True:
-                logger.info("Wait for client: " + str(addr[0]) + ":" + str(addr[1])
-                            + " to receive data")
-                if read(self.package_handler, sock):
-                    break
+
+        while not self.stopped.isSet():
+            logger.info("Wait for client: " + str(addr[0]) + ":" + str(addr[1])
+                        + " to receive data")
+            if read(self.package_handler, sock):
+                break
+        sock.close()
+
         logger.info("Connection closed by: " + str(addr[0]) + ":" + str(addr[1]))
 
-    def __start(self, max_workers: int = 1):
+    def __start(self):
         """
         Starts a TCP server. The server runs in an infinite loop to handle
-        incoming client connections. Clients are handle by a ThreadPoolExecutor so the server
-        can accept a new client.
-
-        :param max_workers: number of worker threads that will handle the client communication.
+        incoming client connections.
         """
 
         logger.info("Starting server...")
@@ -160,16 +163,17 @@ class Server:
         port = self.address[1]
         logger.info("Server started listening to " + host + ":" + str(port))
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            while True:
-                sock, addr = self.sock.accept()
-                if self.stopped.isSet():
-                    sock.close()
-                    logger.info("Shutdown server...")
-                    executor.shutdown(wait=True)
-                    break
-                executor.submit(self.__handle_client, sock, addr)
-        self.sock.close()
+        while True:
+            sock, addr = self.sock.accept()
+            if self.stopped.isSet():
+                sock.close()
+                logger.info("Shutdown server...")
+                self.sock.close()
+                break
+            name = "Client-" + str(addr[1])
+            thread = Thread(target=self.__handle_client, args=(sock, addr,), name=name)
+            thread.start()
+
         logger.info("Shutdown complete")
 
     def start(self,  max_workers: int = 1):
@@ -180,7 +184,7 @@ class Server:
         :param max_workers: number of worker threads that will handle the client communication.
         """
         name = "ServerThread"
-        self.thread = threading.Thread(target=self.__start, args=(max_workers,), name=name)
+        self.thread = Thread(target=self.__start, args=(max_workers,), name=name)
         self.thread.start()
         try:
             input()
@@ -214,24 +218,6 @@ class Server:
 
         message = "File with hash '" + hashcode + "' is not stored in the BlockChain"
         return self.package_factory.create_log_package(LogLevel.WARNING, message)
-
-    # def handle_check_file(self, blocks: List[BlockCMD]):
-    #     """
-    #     Checks the blocks of a file in the BlockChain. Checks if the file with given blocks
-    #     exists and if the BlockChain is consistent.
-    #
-    #     :param blocks: the blocks of a file to check.
-    #     :return: package to send back to the client.
-    #     """
-    #
-    #     try:
-    #         hashcode = generate_file_hash(blocks)
-    #         logger.info("Check file with hash '" + hashcode + "'")
-    #     except BlockSectionInconsistentError as error:
-    #         message = "Error while generating hash for file: " + str(error)
-    #         return self.package_factory.create_log_package(LogLevel.WARNING, message)
-    #
-    #     return self.handle_check_hash(hashcode)
 
     def handle_add_block(self, block: BlockCMD):
         """
@@ -331,6 +317,6 @@ def handle_get_file(blocks: List[BlockCMD]):
     blocks.sort(key=lambda x: x.ordinal)
 
     # write to file in binary mode
-    with open("test" + blocks[0].filename, "wb") as file:
+    with open(blocks[0].filename, "wb") as file:
         for block in blocks:
             file.write(block.chunk)
