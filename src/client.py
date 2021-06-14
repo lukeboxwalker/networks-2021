@@ -10,15 +10,19 @@ from web import Client
 
 
 class Terminal:
+    """
+    Class to interact as a user with the client functions.
+    """
 
     def __init__(self, ip: str, port: int):
         self.client = Client(ip, port)
         commands = {
-            "add": self.__add_file,
-            "check": self.__check_file,
-            "get": self.__get_file,
+            "add": self.add_file,  # adding a new file
+            "check": self.check_file,  # check if a file exists
+            "get": self.get_file,  # getting a file back
         }
 
+        # Client main loop. Waiting for user commands
         while True:
             try:
                 text: str = input()
@@ -33,13 +37,23 @@ class Terminal:
                 break
         self.client.close()
 
-    def __add_file(self, command: List[str]):
+    def add_file(self, command: List[str]):
+        """
+        Adds a new file to the server
+
+        :param command: command that contains the file to send.
+        """
         if len(command) != 2:
             logger.error("Command '" + command[0] + "' needs one second argument the filepath!")
         else:
             self.client.add_file(command[1])
 
-    def __check_file(self, command: List[str]):
+    def check_file(self, command: List[str]):
+        """
+        Checks if a file exists on the server.
+
+        :param command: command that contains the hash or file to check.
+        """
         if len(command) != 2:
             logger.error("Command '" + command[0] +
                          "' needs one second argument the filepath or file hash!")
@@ -49,7 +63,12 @@ class Terminal:
             else:
                 self.client.check_hash(command[1])
 
-    def __get_file(self, command: List[str]):
+    def get_file(self, command: List[str]):
+        """
+        Request a file from the server.
+
+        :param command: command that contains the hash to request.
+        """
         if len(command) != 2:
             logger.error("Command '" + command[0] + "' needs one second argument the file hash!")
         else:
