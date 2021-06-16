@@ -26,6 +26,9 @@ class Client:
         self.host = host
         self.port = port
 
+        self.thread = None
+        self.stopped = threading.Event()
+
         # create PackageFactory in SERVER_MODE (creates packages that only a serer accepts)
         # create PackageHandler in CLIENT_MODE (can only handle packages directed to a client)
         self.package_factory = PackageFactory(PackageMode.SERVER_MODE)
@@ -36,8 +39,6 @@ class Client:
         self.package_handler.install(PackageId.SEND_FILE, handle_get_file)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        logger.info("Connecting to server " + str(self.host) + ":" + str(self.port))
-        self.sock.connect((self.host, self.port))
 
     def __send_hash(self, package_id: PackageId, hashcode: str):
         """
@@ -50,7 +51,6 @@ class Client:
 
         logger.info("Sending hash '" + hashcode + "' to the server")
         send(package, self.sock)
-        read(self.package_handler, self.sock)
 
     def __send_file(self, package_id: PackageId, blocks: List[BlockCMD]):
         """
@@ -64,13 +64,35 @@ class Client:
         for block in blocks:
             package = self.package_factory.create_from_object(package_id, block)
             send(package, self.sock)
-            read(self.package_handler, self.sock)
         logger.info("Done sending file with hash '" + blocks[0].hash + "'")
+
+    def __connect(self):
+        """
+        The client receive loop.
+        """
+
+        logger.info("Starting listener")
+        while not self.stopped.isSet():
+            if read(self.package_handler, self.sock):
+                break
+        logger.info("Connection closed")
+
+    def connect(self):
+        """
+        Connect to the server. Starts the listener thread for the client.
+        """
+
+        logger.info("Connecting to server " + str(self.host) + ":" + str(self.port))
+        self.sock.connect((self.host, self.port))
+
+        self.thread = Thread(target=self.__connect, args=(), name="ClientThread")
+        self.thread.start()
 
     def close(self):
         """
         Closes the socket.
         """
+        self.stopped.set()
         self.sock.close()
 
     def get_file(self, hashcode: str):
@@ -176,15 +198,13 @@ class Server:
 
         logger.info("Shutdown complete")
 
-    def start(self,  max_workers: int = 1):
+    def start(self):
         """
         Start the server in its own thread. Blocking the Main Thread until user KeyboardInterrupt
         the process.
-
-        :param max_workers: number of worker threads that will handle the client communication.
         """
         name = "ServerThread"
-        self.thread = Thread(target=self.__start, args=(max_workers,), name=name)
+        self.thread = Thread(target=self.__start, args=(), name=name)
         self.thread.start()
         try:
             input()
@@ -203,7 +223,7 @@ class Server:
             with closing(sock):
                 sock.connect(self.address)
 
-    def handle_check_hash(self, hashcode: str):
+    def handle_check_hash(self, hashcode: str) -> [Package]:
         """
         Checks the hash of a file in the BlockChain. Checks if the file with given hash
         exists and if the BlockChain is consistent.
@@ -214,12 +234,12 @@ class Server:
 
         if self.block_chain.file_exists(hashcode):
             message = "File with hash '" + hashcode + "' is stored in the BlockChain"
-            return self.package_factory.create_log_package(LogLevel.INFO, message)
+            return [self.package_factory.create_log_package(LogLevel.INFO, message)]
 
         message = "File with hash '" + hashcode + "' is not stored in the BlockChain"
-        return self.package_factory.create_log_package(LogLevel.WARNING, message)
+        return [self.package_factory.create_log_package(LogLevel.WARNING, message)]
 
-    def handle_add_block(self, block: BlockCMD):
+    def handle_add_block(self, block: BlockCMD) -> [Package]:
         """
         Adding a new block to the BlockChain.
 
@@ -228,17 +248,17 @@ class Server:
         """
         if not block:
             message = "No block to add!"
-            return self.package_factory.create_log_package(LogLevel.WARNING, message)
+            return [self.package_factory.create_log_package(LogLevel.WARNING, message)]
 
         try:
             hashcode = self.block_chain.add(block)
             message = "Added block with hash '" + hashcode + "' from file '" + block.filename
-            return self.package_factory.create_log_package(LogLevel.INFO, message)
+            return [self.package_factory.create_log_package(LogLevel.INFO, message)]
         except (BlockInsertionError, BlockSectionInconsistentError) as error:
             message = "Error while adding Blocks to the BlockChain: " + str(error)
-            return self.package_factory.create_log_package(LogLevel.ERROR, message)
+            return [self.package_factory.create_log_package(LogLevel.ERROR, message)]
 
-    def handle_request_file(self, hashcode: str):
+    def handle_request_file(self, hashcode: str) -> [Package]:
         """
         Requests a file by its hash value. Server checks if the BlockChain contains the file and if
         so sends it back to the client.
@@ -249,18 +269,19 @@ class Server:
 
         logger.info("Loading data for file with hash '" + hashcode + "'")
         blocks = self.block_chain.get(hashcode)
+        blocks.sort(key=lambda x: x.ordinal)
 
-        cmd_blocks = []
+        packages = []
         for block in blocks:
             cmd = BlockCMD(block.hash, block.index_all, block.ordinal, block.chunk, block.filename)
-            cmd_blocks.append(cmd)
+            packages.append(self.package_factory.create_from_object(PackageId.SEND_FILE, cmd))
 
-        if cmd_blocks:
-            logger.info("Sending " + str(len(cmd_blocks)) + " Block(s) to the client")
+        if packages:
+            logger.info("Sending " + str(len(packages)) + " Block(s) to the client")
         else:
             logger.warning("No Blocks found for file '" + hashcode + "'")
 
-        return self.package_factory.create_from_object(PackageId.SEND_FILE, cmd_blocks)
+        return packages
 
 
 def read(package_handler: PackageHandler, sock: socket.socket) -> bool:
@@ -279,11 +300,12 @@ def read(package_handler: PackageHandler, sock: socket.socket) -> bool:
     package_size = int.from_bytes(buf, byteorder="big")
     byte_package = sock.recv(package_size)
 
-    out_package = package_handler.handle(byte_package)
+    out_packages: List[Package] = package_handler.handle(byte_package)
 
-    # if out package is not None send it back.
-    if out_package:
-        send(out_package, sock)
+    # if out packages is not empty send them back.
+    if out_packages:
+        for package in out_packages:
+            send(package, sock)
 
     return False
 
@@ -303,20 +325,15 @@ def send(package: Package, sock: socket.socket):
         logger.error("Can't send package. Package size to large!")
 
 
-def handle_get_file(blocks: List[BlockCMD]):
+def handle_get_file(block: BlockCMD) -> List[Package]:
     """
-    Creates a file from given blocks. Sorts the blocks by there ordinal and writes them
-    chunk by chunk into a file.
+    Creates a file for the block if not exists and writes the chunk stored in the block to the file.
 
-    :param blocks: to create file from.
+    :param block: the block to write to the file.
     """
-    logger.info("Received " + str(len(blocks)) + " Block(s) from the server")
-    if not blocks:
-        return
-    logger.info("Creating file '" + blocks[0].filename + "'")
-    blocks.sort(key=lambda x: x.ordinal)
+    logger.info("Received Block from the server. Writing to file '" + block.filename)
 
     # write to file in binary mode
-    with open(blocks[0].filename, "wb") as file:
-        for block in blocks:
-            file.write(block.chunk)
+    with open("test" + block.filename, "ab") as file:
+        file.write(block.chunk)
+    return []

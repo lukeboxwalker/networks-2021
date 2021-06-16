@@ -3,7 +3,7 @@ Module that holds the classes and functions needed for TCP package communication
 """
 
 import pickle
-from typing import Callable, Dict
+from typing import Callable, Dict, List
 from enum import IntEnum
 from exceptions import PackageCreationError, PackageHandleError
 from logger import LogResult, LogLevel, logger
@@ -162,7 +162,7 @@ class PackageHandler:
 
     def __init__(self, package_mode: PackageMode, package_factory: PackageFactory):
         self.__package_mode = package_mode
-        self.__handlers: Dict[int, Callable[[object], Package]] = dict()
+        self.__handlers: Dict[int, Callable[[object], List[Package]]] = dict()
         self.__package_factory = package_factory
 
     def install(self, package_id: int, handler: Callable):
@@ -182,7 +182,7 @@ class PackageHandler:
         """
         del self.__handlers[package_id]
 
-    def handle(self, byte_buffer: bytes) -> Package:
+    def handle(self, byte_buffer: bytes) -> List[Package]:
         """
         Handling the given bytes as a package and call the installed handler.
 

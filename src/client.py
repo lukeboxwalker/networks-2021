@@ -16,6 +16,7 @@ class Terminal:
 
     def __init__(self, ip: str, port: int):
         self.client = Client(ip, port)
+        self.client.connect()
         commands = {
             "add": self.add_file,  # adding a new file
             "check": self.check_file,  # check if a file exists
