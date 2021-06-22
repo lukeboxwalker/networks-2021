@@ -3,7 +3,7 @@ Module that holds custom exceptions.
 """
 
 
-class BlockInsertionError(Exception):
+class DuplicateBlockError(Exception):
     """
     Raised when a Block can not be inserted into the BlockChain.
     """

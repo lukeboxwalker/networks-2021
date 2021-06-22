@@ -11,7 +11,7 @@ from threading import Thread
 from contextlib import closing
 from typing import List, Tuple
 from data import BlockChain, BlockCMD, load_file, generate_file_hash
-from exceptions import BlockSectionInconsistentError, BlockInsertionError
+from exceptions import BlockSectionInconsistentError, DuplicateBlockError
 from logger import logger, LogLevel
 from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
 
@@ -240,8 +240,10 @@ class Server:
         :return: package to send back to the client.
         """
 
-        if self.block_chain.file_exists(hashcode):
-            message = "File with hash '" + hashcode + "' is stored in the BlockChain"
+        exists, num = self.block_chain.file_exists(hashcode)
+        if exists:
+            message = "File with hash '" + hashcode + "' is stored in the BlockChain " \
+                                                      "as a total of " + str(num) + " Block(s)"
             return [self.package_factory.create_log_package(LogLevel.INFO, message)]
 
         message = "File with hash '" + hashcode + "' is not stored in the BlockChain"
@@ -262,7 +264,7 @@ class Server:
             hashcode = self.block_chain.add(block)
             message = "Added block with hash '" + hashcode + "' from file '" + block.filename
             return [self.package_factory.create_log_package(LogLevel.INFO, message)]
-        except (BlockInsertionError, BlockSectionInconsistentError) as error:
+        except (DuplicateBlockError, BlockSectionInconsistentError) as error:
             message = "Error while adding Blocks to the BlockChain: " + str(error)
             return [self.package_factory.create_log_package(LogLevel.ERROR, message)]
 

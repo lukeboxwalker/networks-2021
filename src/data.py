@@ -9,8 +9,8 @@ import threading
 import zlib
 
 from os import path
-from typing import List, Dict
-from exceptions import BlockInsertionError, BlockSectionInconsistentError
+from typing import List, Dict, Tuple
+from exceptions import DuplicateBlockError, BlockSectionInconsistentError
 
 # Chunk size for the data a single Block is holding.
 # Size is defined by project specification.
@@ -199,22 +199,31 @@ class BlockChain:
             block = self.__chain.get(block.hash_previous)  # thread safe block can only be read
         return blocks
 
-    def file_exists(self, hashcode: str) -> bool:
+    def file_exists(self, hashcode: str) -> Tuple[bool, int]:
         """
         Checks if the given hash representing a file exists in the BlockChain.
         Method performs a thread safe action on the BlockChain no explicit locking needed.
 
         :param hashcode: the hashcode to check
-        :return: if the whole BlockChain consistent from the given hash.
+        :return: if the whole BlockChain consistent from the given hash as well as the number of
+        blocks for the file
         """
 
         blocks = self.__get_blocks_for_file(hashcode)
         try:
-            return generate_file_hash(blocks) == hashcode
+            return generate_file_hash(blocks) == hashcode, len(blocks)
         except BlockSectionInconsistentError:
-            return False
+            return False, 0
 
-    def add(self, block: BlockCMD) -> str:
+    def size(self):
+        """
+        Gets the size of the BlockChain.
+
+        :return size of the chain.
+        """
+        return self.__chain.size()
+
+    def add(self, block_cmd: BlockCMD) -> str:
         """
         Adds a new Block to the BlockChain.
         Method performs a thread safe action on the BlockChain by acquiring a lock.
@@ -222,12 +231,22 @@ class BlockChain:
         Creates a new section of Blocks for a new file or add a Block to an existing
         Block section in the BlockChain.
 
-        :param block: the block to insert into the BlockChain.
+        :param block_cmd: the block to insert into the BlockChain.
+        :raise DuplicateBlockError: if block already exists.
         """
 
         with self.__lock:  # ensures atomic operation
-            hash_previous = self.__chain.get_head()  # thread safe get_head() is using a lock
-            hashcode = self.__chain.add(Block(hash_previous, block))
+            head = self.__chain.get_head()  # thread safe get_head() is using a lock
+            new_block = Block(head, block_cmd)
+
+            block = self.__chain.get(head)
+            while block is not None:
+                if block.__eq__(new_block):
+                    raise DuplicateBlockError("Block already exists!")
+
+                block = self.__chain.get(block.hash_previous)  # thread safe block can only be read
+
+            hashcode = self.__chain.add(new_block)
             self.__chain.update_head(hashcode)  # thread safe update_head() is using a lock
             return hashcode
 
@@ -269,6 +288,14 @@ class MemoryDictionary:
         with self.__head_lock:
             self.__head = hashcode
 
+    def size(self):
+        """
+        Gets the size of the map.
+
+        :return size of the map.
+        """
+        return len(self.__map)
+
     def contains(self, block: Block) -> bool:
         """
         Checks if the given hashcode of the block exists.
@@ -301,9 +328,6 @@ class MemoryDictionary:
         :param block: the block to save.
         """
         hashcode = hash_block(block)
-        if self.__map.__contains__(hashcode):
-            raise BlockInsertionError("Block already exists!")
-
         self.__map[hashcode] = block
         return hashcode
 
@@ -353,6 +377,14 @@ class FileDictionary:
         """
         if not path.isdir(self.root + "/" + hashcode[:2]):
             os.mkdir(self.root + "/" + hashcode[:2])
+
+    def size(self):
+        """
+        Gets the number of files stored.
+
+        :return size of files.
+        """
+        return len([name for name in os.listdir(self.root) if os.path.isfile(name)])
 
     def get_head(self):
         """
@@ -416,9 +448,6 @@ class FileDictionary:
         self.__create_dir_if_not_exists(hashcode)
 
         filepath = self.__get_path(hashcode)
-        if path.isfile(filepath):
-            raise BlockInsertionError("Block already exists!")
-
         with open(filepath, "wb") as file:
             data = pickle.dumps(block)
             file.write(zlib.compress(data))
@@ -434,12 +463,7 @@ def hash_block(block: Block) -> str:
     :return: sha256 hash for the block.
     """
     sha256 = hashlib.sha256()
-
-    hashcode = hash(block)
-    bits = hashcode.bit_length()
-    bits += 8 - ((bits % 8) or 8)
-
-    sha256.update(hashcode.to_bytes(bits // 8, byteorder="big", signed=True))
+    sha256.update(pickle.dumps(block))
     return sha256.hexdigest()
 
 
