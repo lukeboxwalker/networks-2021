@@ -9,7 +9,7 @@ import threading
 import zlib
 
 from os import path
-from typing import List
+from typing import List, Dict
 from exceptions import BlockInsertionError, BlockSectionInconsistentError
 
 # Chunk size for the data a single Block is holding.
@@ -171,8 +171,8 @@ class BlockChain:
     All methods are thread safe, so multiple threads can operate on the BlockChain.
     """
 
-    def __init__(self):
-        self.__chain: FileDictionary = FileDictionary()
+    def __init__(self, in_memory: bool = True):
+        self.__chain = MemoryDictionary() if in_memory else FileDictionary()
         self.__lock = threading.Lock()  # lock to ensures adding as an atomic operation
 
     def __get_blocks_for_file(self, hashcode: str) -> List[Block]:
@@ -241,6 +241,73 @@ class BlockChain:
         return self.__get_blocks_for_file(hashcode)
 
 
+class MemoryDictionary:
+    """
+    Class that stores the BlockChain in a Dict.
+    """
+
+    def __init__(self):
+        self.__head_lock = threading.Lock()  # lock to ensures read write head is thread safe
+        self.__map: Dict[str, Block] = dict()
+        self.__head = None
+
+    def get_head(self):
+        """
+        Reading the last hash previous.
+
+        :return: the head or current 'hash previous', returns None if head does not exists.
+        """
+        with self.__head_lock:
+            return self.__head
+
+    def update_head(self, hashcode: str):
+        """
+        Updates the head to given hash.
+
+        :param hashcode: hash to update head with.
+        """
+        with self.__head_lock:
+            self.__head = hashcode
+
+    def contains(self, block: Block) -> bool:
+        """
+        Checks if the given hashcode of the block exists.
+
+        :param block: the block to check.
+        :return: if the block is part of the BlockChain.
+        """
+        hashcode = hash_block(block)
+        return self.__map.__contains__(hashcode)
+
+    def get(self, hashcode: str):
+        """
+        Load the block stored for the hash.
+
+        :param hashcode: hashcode to load Block for.
+        :return: the Block saved under the given hashcode. Returns None if hashcode is None or
+        the hashcode does not exists in the map.
+        """
+        if not hashcode:
+            return None
+
+        if self.__map.__contains__(hashcode):
+            return self.__map.get(hashcode)
+        return None
+
+    def add(self, block: Block) -> str:
+        """
+        Stores the given Block back in the map.
+
+        :param block: the block to save.
+        """
+        hashcode = hash_block(block)
+        if self.__map.__contains__(hashcode):
+            raise BlockInsertionError("Block already exists!")
+
+        self.__map[hashcode] = block
+        return hashcode
+
+
 class FileDictionary:
     """
     Class that stores the BlockChain in the filesystem in a 'git like' way.
@@ -289,7 +356,7 @@ class FileDictionary:
 
     def get_head(self):
         """
-        Reading the hash previous stored in the head file.
+        Reading the last hash previous.
 
         :return: the head or current 'hash previous', returns None if file does not exists.
         """
@@ -321,7 +388,7 @@ class FileDictionary:
 
     def get(self, hashcode: str):
         """
-        Loads all Blocks stored for the file hash.
+        Load the block stored for the hash.
         Decompresses the byte array stored to the file with zlib.
 
         :param hashcode: hashcode to load Blocks for.

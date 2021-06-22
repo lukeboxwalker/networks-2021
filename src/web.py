@@ -2,7 +2,9 @@
 Module that holds the classes and functions needed for the client server communication.
 """
 import os
+import signal
 import socket
+import sys
 import threading
 from threading import Thread
 
@@ -69,13 +71,19 @@ class Client:
     def __connect(self):
         """
         The client receive loop.
+        Closes the program when server disconnected.
         """
 
         logger.info("Starting listener")
         while not self.stopped.isSet():
             if read(self.package_handler, self.sock):
-                break
-        logger.info("Connection closed")
+                return
+
+        if self.stopped.isSet():
+            logger.info("Lost connection")
+            os.kill(os.getpid(), signal.SIGINT)
+        else:
+            logger.info("Connection closed")
 
     def connect(self):
         """
@@ -293,20 +301,21 @@ def read(package_handler: PackageHandler, sock: socket.socket) -> bool:
     :param sock: the socket to communicate to.
     :return: if client closed the connection.
     """
+    try:
+        buf = sock.recv(MAX_PACKAGE_SIZE)
+        if not buf:
+            return True
+        package_size = int.from_bytes(buf, byteorder="big")
+        byte_package = sock.recv(package_size)
 
-    buf = sock.recv(MAX_PACKAGE_SIZE)
-    if not buf:
+        out_packages: List[Package] = package_handler.handle(byte_package)
+
+        # if out packages is not empty send them back.
+        if out_packages:
+            for package in out_packages:
+                send(package, sock)
+    except socket.error:
         return True
-    package_size = int.from_bytes(buf, byteorder="big")
-    byte_package = sock.recv(package_size)
-
-    out_packages: List[Package] = package_handler.handle(byte_package)
-
-    # if out packages is not empty send them back.
-    if out_packages:
-        for package in out_packages:
-            send(package, sock)
-
     return False
 
 

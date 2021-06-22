@@ -89,7 +89,7 @@ class Logger:
         console.setLevel(logging.INFO)
 
         # Using colored formatter
-        format_string = "%(asctime)s [%(levelname)-7s] [%(threadName)-22s]  %(message)s"
+        format_string = "%(asctime)s [%(levelname)-7s] [%(threadName)-15s]  %(message)s"
         console.setFormatter(ColorFormatter(format_string))
 
         self.logger.addHandler(console)
