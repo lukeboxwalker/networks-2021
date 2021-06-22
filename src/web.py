@@ -4,7 +4,6 @@ Module that holds the classes and functions needed for the client server communi
 import os
 import signal
 import socket
-import sys
 import threading
 from threading import Thread
 

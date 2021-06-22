@@ -82,6 +82,19 @@ class BlockCMD:
         """
         return self.__filename
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Block):
+            return False
+        return (self.hash == other.hash and
+                self.index_all == other.index_all and
+                self.ordinal == other.ordinal and
+                self.chunk == other.chunk and
+                self.filename == other.filename)
+
+    def __hash__(self) -> int:
+        values = frozenset((self.hash, self.index_all, self.ordinal, self.chunk, self.__filename))
+        return hash(values)
+
 
 class Block:
     """
