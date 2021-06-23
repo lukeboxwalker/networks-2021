@@ -34,11 +34,21 @@ class Block:
 
     @staticmethod
     def no_previous(hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str):
+        """
+        Creates new Block with no where the hash_previous is not yet known
+
+        :return: a new Block.
+        """
         return Block(hash=hashcode, index_all=index_all, ordinal=ordinal,
                      filename=filename, chunk=chunk, hash_previous=None)
 
     @staticmethod
     def set_previous(hash_previous: str, block):
+        """
+        Creates new Block from existing with given hash previous.
+
+        :return: a new Block.
+        """
         return Block(hash=block.hash, index_all=block.index_all, ordinal=block.ordinal,
                      filename=block.filename, chunk=block.chunk, hash_previous=hash_previous)
 

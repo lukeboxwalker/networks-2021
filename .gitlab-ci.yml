@@ -7,7 +7,6 @@ before_script:
 stages:
   - Static Analysis
   - Test
-  - Build
 
 pylint:
   stage: Static Analysis
@@ -18,4 +17,4 @@ pylint:
 pytest:
   stage: Test
   script:
-  - cd test/;python -m unittest discover
+  - cd test/;PYTHONPATH ../src python -m unittest *_test.py
