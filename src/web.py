@@ -10,7 +10,7 @@ from threading import Thread
 from contextlib import closing
 from typing import List, Tuple
 from data import BlockChain, load_file, generate_file_hash, Block
-from exceptions import BlockSectionInconsistentError, DuplicateBlockError
+from exceptions import DuplicateBlockError
 from logger import logger, LogLevel
 from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
 
@@ -59,11 +59,14 @@ class Client:
         :param blocks: the blocks of a file to send.
         """
 
-        logger.info("Sending " + str(len(blocks)) + " Block(s) to the server")
-        for block in blocks:
-            package = self.package_factory.create_from_object(package_id, block)
+        length = len(blocks)
+
+        for i in range(length):
+            package = self.package_factory.create_from_object(package_id, blocks[i])
             send(package, self.sock)
-        logger.info("Done sending file with hash '" + blocks[0].hash + "'")
+            logger.load(i + 1, length)
+        logger.info(
+            "Done sending " + str(len(blocks)) + " Block(s) file hash: '" + blocks[0].hash + "'")
 
     def __connect(self):
         """
@@ -188,8 +191,6 @@ class Server:
         logger.info("Incoming connection from: " + str(addr[0]) + ":" + str(addr[1]))
 
         while not self.stopped.isSet():
-            logger.info("Wait for client: " + str(addr[0]) + ":" + str(addr[1])
-                        + " to receive data")
             if read(self.package_handler, sock):
                 break
         sock.close()
@@ -272,16 +273,15 @@ class Server:
         :return: package to send back to the client.
         """
         if not block:
-            message = "No block to add!"
-            return [self.package_factory.create_log_package(LogLevel.WARNING, message)]
+            return []
 
         try:
             hashcode = self.block_chain.add(block)
-            message = "Added block with hash '" + hashcode + "' from file '" + block.filename
-            return [self.package_factory.create_log_package(LogLevel.INFO, message)]
-        except (DuplicateBlockError, BlockSectionInconsistentError) as error:
-            message = "Error while adding Blocks to the BlockChain: " + str(error)
-            return [self.package_factory.create_log_package(LogLevel.ERROR, message)]
+            logger.info("Added block with hash '" + hashcode + "' from file '" + block.filename)
+            return []
+        except DuplicateBlockError as error:
+            logger.error("Error while adding Blocks to the BlockChain: " + str(error))
+        return []
 
     def handle_request_file(self, hashcode: str) -> [Package]:
         """
@@ -298,9 +298,10 @@ class Server:
         packages = []
 
         if blocks:
-            logger.info("Sending " + str(len(packages)) + " Block(s) to the client")
+            logger.info("Sending " + str(len(blocks)) + " Block(s) to the client")
         else:
-            logger.warning("No Blocks found for file '" + hashcode + "'")
+            message = "No Blocks found for file hash '" + hashcode + "'"
+            return [self.package_factory.create_log_package(LogLevel.WARNING, message)]
 
         hashcode = blocks[0].hash
         index_all = blocks[0].index_all

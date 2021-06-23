@@ -51,7 +51,7 @@ class Logger:
     """
 
     @staticmethod
-    def __format_print(msg, log_level, end="\n"):
+    def __prefix(log_level: LogLevel):
         now = datetime.now()
         ctime = now.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -60,8 +60,10 @@ class Logger:
 
         name = log_level.name + spaces(7, log_level.name)
         thread = threading.current_thread().name + spaces(15, threading.current_thread().name)
-        text = "{} [{}] [{}]  {}".format(ctime, name, thread, msg)
-        print(text, end=end)
+        return "{} [{}] [{}]  ".format(ctime, name, thread)
+
+    def __format_print(self, msg: str, log_level: LogLevel):
+        print(self.__prefix(log_level) + msg)
 
     def log(self, log_result: LogResult):
         """
@@ -89,13 +91,13 @@ class Logger:
         :param decimals: decimal places
         """
         percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-        filled_length = int(100 * iteration // total)
-        tiles = '█' * filled_length + '-' * (100 - filled_length)
+        filled_length = int(50 * iteration // total)
+        tiles = '█' * filled_length + '_' * (50 - filled_length)
+        text = f'\r{self.__prefix(LogLevel.INFO) + "Progress"} |{tiles}| {percent}% {"Complete"}'
         if iteration == total:
-            self.__format_print(f'\r{"Progress"} |{tiles}| {percent}% {"Complete"}', LogLevel.INFO)
+            print(text)
         else:
-            self.__format_print(f'\r{"Progress"} |{tiles}| {percent}% {"Complete"}', LogLevel.INFO,
-                                end="")
+            print(text, end="")
 
     def warning(self, message):
         """

@@ -14,34 +14,23 @@ class BlockTest(unittest.TestCase):
         [random.randint(0, 1024).to_bytes(2, byteorder="big") for _ in range(9)],
         ["test1", "test2", "test3", "test4", "test5", "test6", "test7", "test8", "test9"]
     ])])
-    def test_unmodifiable(self, hashcode, index_all, ordinal, chunk, filename):
-        unmodifiable_block = Block("dff49e", 0, 0, b'0', "file")
+    def test_equals_and_hash(self, hashcode, index_all, ordinal, chunk, filename):
+        block1 = Block(hashcode, index_all, ordinal, chunk, filename)
+        block2 = Block(hashcode, index_all, ordinal, chunk, filename)
 
-        def set_hash():
-            unmodifiable_block.hash = hashcode
+        # should be equal
+        self.assertTrue(block1.__eq__(block2))
+        self.assertTrue(block2.__eq__(block1))
+        self.assertEqual(block1.__hash__(), block2.__hash__())
 
-        def set_index_all():
-            unmodifiable_block.index_all = index_all
+        # the hash_previous should not be part of the equal
+        block1 = Block(hashcode, index_all, ordinal, chunk, filename, "a51c23")
+        block2 = Block(hashcode, index_all, ordinal, chunk, filename, None)
 
-        def set_ordinal():
-            unmodifiable_block.ordinal = ordinal
-
-        def set_chunk():
-            unmodifiable_block.chunk = chunk
-
-        def set_filename():
-            unmodifiable_block.filename = filename
-
-        def set_hash_previous():
-            unmodifiable_block.hash_previous = hashcode
-
-        # should not be able to manipulate any of the fields
-        self.assertRaises(AttributeError, set_hash)
-        self.assertRaises(AttributeError, set_index_all)
-        self.assertRaises(AttributeError, set_ordinal)
-        self.assertRaises(AttributeError, set_chunk)
-        self.assertRaises(AttributeError, set_filename)
-        self.assertRaises(AttributeError, set_hash_previous)
+        # should be equal
+        self.assertTrue(block1.__eq__(block2))
+        self.assertTrue(block2.__eq__(block1))
+        self.assertEqual(block1.__hash__(), block2.__hash__())
 
 
 if __name__ == '__main__':

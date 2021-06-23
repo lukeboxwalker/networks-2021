@@ -14,7 +14,6 @@ from exceptions import DuplicateBlockError, BlockSectionInconsistentError
 
 # Chunk size for the data a single Block is holding.
 # Size is defined by project specification.
-from logger import logger
 
 CHUNK_SIZE = 500
 
@@ -478,7 +477,6 @@ def load_file(filepath: str) -> List[Block]:
             sha256.update(chunk)
     index_all = len(chunks)
     hashcode = sha256.hexdigest()
-    logger.info("Loading file '" + filename + "' with hash '" + hashcode + "'")
 
     blocks = []
     for ordinal, chunk in enumerate(chunks):
