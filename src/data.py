@@ -161,8 +161,7 @@ class BlockChain:
         Method performs a thread safe action on the BlockChain no explicit locking needed.
 
         :param hashcode: the hashcode to check
-        :return: if the whole BlockChain consistent from the given hash as well as the number of
-        blocks for the file
+        :return: if the blocks for the file hash exists and how many block are stored for that file.
         """
 
         blocks = self.__get_blocks_for_file(hashcode)

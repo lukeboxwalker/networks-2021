@@ -14,7 +14,7 @@ pylint:
   - pip install pylint
   - pylint src/
 
-pytest:
+unittest:
   stage: Test
   script:
   - cd test/;PYTHONPATH=../src python -m unittest *_test.py
