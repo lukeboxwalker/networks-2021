@@ -5,6 +5,7 @@ import os
 import signal
 import socket
 import threading
+import time
 from threading import Thread
 
 from contextlib import closing
@@ -49,8 +50,6 @@ class Client:
         :param hashcode: to send to server.
         """
         package = self.package_factory.create_from_object(package_id, hashcode)
-
-        logger.info("Sending hash '" + hashcode + "' to the server")
         send(package, self.sock)
 
     def __send_file(self, package_id: PackageId, blocks: List[Block]):
@@ -108,6 +107,7 @@ class Client:
 
         :param hashcode: the file hash to restore the file from.
         """
+        logger.info("Requesting file '" + hashcode + "'")
         self.__send_hash(PackageId.GET_FILE, hashcode)
 
     def check_hash(self, hashcode: str):
@@ -116,6 +116,7 @@ class Client:
 
         :param hashcode: to send to server and check.
         """
+        logger.info("Checking file '" + hashcode + "'")
         self.__send_hash(PackageId.HASH_CHECK, hashcode)
 
     def check_file(self, filepath: str):
@@ -333,7 +334,6 @@ def send(package: Package, sock: socket.socket):
     """
     try:
         size = len(package.raw)
-        logger.info("Sending package with size: " + str(size))
         sock.sendall(size.to_bytes(MAX_PACKAGE_SIZE, byteorder="big") + package.raw)
     except OverflowError:
         logger.error("Can't send package. Package size to large!")
@@ -345,7 +345,7 @@ def handle_get_file(block: Block) -> List[Package]:
 
     :param block: the block to write to the file.
     """
-    logger.info("Received Block from the server. Writing to file '" + block.filename)
+    logger.load(block.ordinal + 1, block.index_all)
 
     # write to file in binary mode
     with open("test" + block.filename, "ab") as file:

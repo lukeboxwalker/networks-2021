@@ -2,13 +2,10 @@
 Module that holds the classes and functions needed for the logger.
 """
 
-import logging
+import threading
+from datetime import datetime
 
 from enum import Enum
-from typing import Callable, Dict
-
-import colorama
-from colorama import Fore, Style
 
 
 class LogLevel(Enum):
@@ -48,58 +45,23 @@ class LogResult:
         return self.__message
 
 
-class ColorFormatter(logging.Formatter):
-    """
-    Class to format log text by applying color to the string.
-    """
-
-    def __init__(self, msg):
-        logging.Formatter.__init__(self, msg)
-
-        # color codes for different log levels
-        self.colors = {
-            "WARNING": Fore.LIGHTYELLOW_EX,
-            "INFO": Fore.WHITE,
-            "ERROR": Fore.LIGHTRED_EX
-        }
-
-    def format(self, record):
-        """
-        Formats a log record by adding color to it. The color is determined by the log level.
-        The format ends with a color reset "\033[0m".
-
-        :param record: the record to format
-        :return: the formatted string.
-        """
-        name = record.levelname
-        return self.colors[name] + logging.Formatter.format(self, record) + Style.RESET_ALL
-
-
 class Logger:
     """
     Class to log text to the console.
     """
-    def __init__(self):
-        # Setup logger
-        self.logger = logging.getLogger("Application")
-        self.logger.setLevel(logging.INFO)
 
-        # Init console stream handler
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
+    @staticmethod
+    def __format_print(msg, log_level, end="\n"):
+        now = datetime.now()
+        ctime = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Using colored formatter
-        format_string = "%(asctime)s [%(levelname)-7s] [%(threadName)-15s]  %(message)s"
-        console.setFormatter(ColorFormatter(format_string))
+        def spaces(n, string) -> str:
+            return " " * ((n - len(string)) if len(string) < n else 0)
 
-        self.logger.addHandler(console)
-
-        # Init dictionary to log to different levels
-        self.log_levels: Dict[LogLevel, Callable] = {
-            LogLevel.INFO: self.logger.info,
-            LogLevel.WARNING: self.logger.warning,
-            LogLevel.ERROR: self.logger.error
-        }
+        name = log_level.name + spaces(7, log_level.name)
+        thread = threading.current_thread().name + spaces(15, threading.current_thread().name)
+        text = "{} [{}] [{}]  {}".format(ctime, name, thread, msg)
+        print(text, end=end)
 
     def log(self, log_result: LogResult):
         """
@@ -108,8 +70,7 @@ class Logger:
 
         :param log_result: the LogResult log to the console.
         """
-        if self.log_levels.__contains__(log_result.log_level):
-            self.log_levels.get(log_result.log_level)(log_result.message)
+        self.__format_print(log_result.message, log_result.log_level)
 
     def info(self, message):
         """
@@ -117,7 +78,17 @@ class Logger:
 
         :param message: message to log/print.
         """
-        self.logger.info(message)
+        self.__format_print(message, LogLevel.INFO)
+
+    def load(self, iteration, total, decimals=1):
+        percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+        filled_length = int(100 * iteration // total)
+        bar = '█' * filled_length + '-' * (100 - filled_length)
+        if iteration == total:
+            self.__format_print(f'\r{"Progress"} |{bar}| {percent}% {"Complete"}', LogLevel.INFO)
+        else:
+            self.__format_print(f'\r{"Progress"} |{bar}| {percent}% {"Complete"}', LogLevel.INFO,
+                                end="")
 
     def warning(self, message):
         """
@@ -125,7 +96,7 @@ class Logger:
 
         :param message: message to log/print.
         """
-        self.logger.warning(message)
+        self.__format_print(message, LogLevel.WARNING)
 
     def error(self, message):
         """
@@ -133,10 +104,8 @@ class Logger:
 
         :param message: message to log/print.
         """
-        self.logger.error(message)
+        self.__format_print(message, LogLevel.ERROR)
 
-
-colorama.init()
 
 # Logger object to log to console
 logger = Logger()
