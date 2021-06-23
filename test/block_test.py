@@ -15,7 +15,7 @@ class BlockTest(unittest.TestCase):
         ["test1", "test2", "test3", "test4", "test5", "test6", "test7", "test8", "test9"]
     ])])
     def test_unmodifiable(self, hashcode, index_all, ordinal, chunk, filename):
-        unmodifiable_block = Block.no_previous("dff49e", 0, 0, b'0', "file")
+        unmodifiable_block = Block("dff49e", 0, 0, b'0', "file")
 
         def set_hash():
             unmodifiable_block.hash = hashcode

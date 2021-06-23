@@ -19,28 +19,23 @@ from logger import logger
 CHUNK_SIZE = 500
 
 
+# Disable too instance attributes. Attributes are needed to make them immutable.
+# pylint: disable=too-many-instance-attributes
 class Block:
     """
     Class that represents a Block in a BlockChain.
     """
 
-    def __init__(self, **kwargs):
-        self.__hashcode = kwargs.get("hash")
-        self.__index_all = kwargs.get("index_all")
-        self.__ordinal = kwargs.get("ordinal")
-        self.__filename = kwargs.get("filename")
-        self.__chunk = kwargs.get("chunk")
-        self.__hash_previous = kwargs.get("hash_previous")
-
-    @staticmethod
-    def no_previous(hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str):
-        """
-        Creates new Block with no where the hash_previous is not yet known
-
-        :return: a new Block.
-        """
-        return Block(hash=hashcode, index_all=index_all, ordinal=ordinal,
-                     filename=filename, chunk=chunk, hash_previous=None)
+    # Disable too many arguments. Doesnt make much sense to group the variables instead.
+    # pylint: disable=too-many-arguments
+    def __init__(self, hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str,
+                 hash_previous=None):
+        self.__hashcode = hashcode
+        self.__index_all = index_all
+        self.__ordinal = ordinal
+        self.__filename = filename
+        self.__chunk = chunk
+        self.__hash_previous = hash_previous
 
     @staticmethod
     def set_previous(hash_previous: str, block):
@@ -49,7 +44,7 @@ class Block:
 
         :return: a new Block.
         """
-        return Block(hash=block.hash, index_all=block.index_all, ordinal=block.ordinal,
+        return Block(hashcode=block.hash, index_all=block.index_all, ordinal=block.ordinal,
                      filename=block.filename, chunk=block.chunk, hash_previous=hash_previous)
 
     @property
@@ -487,5 +482,5 @@ def load_file(filepath: str) -> List[Block]:
 
     blocks = []
     for ordinal, chunk in enumerate(chunks):
-        blocks.append(Block.no_previous(hashcode, index_all, ordinal, chunk, filename))
+        blocks.append(Block(hashcode, index_all, ordinal, chunk, filename))
     return blocks

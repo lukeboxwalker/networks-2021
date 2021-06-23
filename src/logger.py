@@ -55,8 +55,8 @@ class Logger:
         now = datetime.now()
         ctime = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        def spaces(n, string) -> str:
-            return " " * ((n - len(string)) if len(string) < n else 0)
+        def spaces(max_n, string) -> str:
+            return " " * ((max_n - len(string)) if len(string) < max_n else 0)
 
         name = log_level.name + spaces(7, log_level.name)
         thread = threading.current_thread().name + spaces(15, threading.current_thread().name)
@@ -81,13 +81,20 @@ class Logger:
         self.__format_print(message, LogLevel.INFO)
 
     def load(self, iteration, total, decimals=1):
+        """
+        Creates a loading bar. Print it to the console.
+
+        :param iteration: the current position of the bar
+        :param total: the total amount of the bar
+        :param decimals: decimal places
+        """
         percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
         filled_length = int(100 * iteration // total)
-        bar = '█' * filled_length + '-' * (100 - filled_length)
+        tiles = '█' * filled_length + '-' * (100 - filled_length)
         if iteration == total:
-            self.__format_print(f'\r{"Progress"} |{bar}| {percent}% {"Complete"}', LogLevel.INFO)
+            self.__format_print(f'\r{"Progress"} |{tiles}| {percent}% {"Complete"}', LogLevel.INFO)
         else:
-            self.__format_print(f'\r{"Progress"} |{bar}| {percent}% {"Complete"}', LogLevel.INFO,
+            self.__format_print(f'\r{"Progress"} |{tiles}| {percent}% {"Complete"}', LogLevel.INFO,
                                 end="")
 
     def warning(self, message):

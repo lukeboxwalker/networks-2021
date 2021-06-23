@@ -5,7 +5,6 @@ import os
 import signal
 import socket
 import threading
-import time
 from threading import Thread
 
 from contextlib import closing
@@ -38,7 +37,7 @@ class Client:
 
         # install package handlers for incoming packages
         self.package_handler.install(PackageId.LOG_TEXT, logger.log)
-        self.package_handler.install(PackageId.SEND_FILE, handle_get_file)
+        self.package_handler.install(PackageId.SEND_FILE, self.handle_get_file)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
 
@@ -140,6 +139,22 @@ class Client:
             self.__send_file(PackageId.SEND_FILE, load_file(filepath))
         else:
             logger.error("The file '" + filepath + "' does not exist!")
+
+    @staticmethod
+    def handle_get_file(block: Block) -> List[Package]:
+        """
+        Creates a file for the block if not exists and writes
+        the chunk stored in the block to the file.
+
+        :param block: the block to write to the file.
+        """
+        logger.load(block.ordinal + 1, block.index_all)
+
+        # write to file in binary mode
+        with open("test" + block.filename, "ab") as file:
+            file.write(block.chunk)
+
+        return []
 
 
 class Server:
@@ -292,7 +307,7 @@ class Server:
         filename = blocks[0].filename
 
         for block in blocks:
-            cmd = Block.no_previous(hashcode, index_all, block.ordinal, block.chunk, filename)
+            cmd = Block(hashcode, index_all, block.ordinal, block.chunk, filename)
             packages.append(self.package_factory.create_from_object(PackageId.SEND_FILE, cmd))
 
         return packages
@@ -337,17 +352,3 @@ def send(package: Package, sock: socket.socket):
         sock.sendall(size.to_bytes(MAX_PACKAGE_SIZE, byteorder="big") + package.raw)
     except OverflowError:
         logger.error("Can't send package. Package size to large!")
-
-
-def handle_get_file(block: Block) -> List[Package]:
-    """
-    Creates a file for the block if not exists and writes the chunk stored in the block to the file.
-
-    :param block: the block to write to the file.
-    """
-    logger.load(block.ordinal + 1, block.index_all)
-
-    # write to file in binary mode
-    with open("test" + block.filename, "ab") as file:
-        file.write(block.chunk)
-    return []
