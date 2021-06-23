@@ -9,7 +9,7 @@ from threading import Thread
 
 from contextlib import closing
 from typing import List, Tuple
-from data import BlockChain, BlockCMD, load_file, generate_file_hash
+from data import BlockChain, load_file, generate_file_hash, Block
 from exceptions import BlockSectionInconsistentError, DuplicateBlockError
 from logger import logger, LogLevel
 from package import PackageFactory, PackageHandler, PackageMode, Package, PackageId
@@ -53,7 +53,7 @@ class Client:
         logger.info("Sending hash '" + hashcode + "' to the server")
         send(package, self.sock)
 
-    def __send_file(self, package_id: PackageId, blocks: List[BlockCMD]):
+    def __send_file(self, package_id: PackageId, blocks: List[Block]):
         """
         Sends a file in form of blocks to the server with given package id.
 
@@ -248,7 +248,7 @@ class Server:
         message = "File with hash '" + hashcode + "' is not stored in the BlockChain"
         return [self.package_factory.create_log_package(LogLevel.WARNING, message)]
 
-    def handle_add_block(self, block: BlockCMD) -> [Package]:
+    def handle_add_block(self, block: Block) -> [Package]:
         """
         Adding a new block to the BlockChain.
 
@@ -278,17 +278,21 @@ class Server:
 
         logger.info("Loading data for file with hash '" + hashcode + "'")
         blocks = self.block_chain.get(hashcode)
-        blocks.sort(key=lambda x: x.ordinal)
 
         packages = []
-        for block in blocks:
-            cmd = BlockCMD(block.hash, block.index_all, block.ordinal, block.chunk, block.filename)
-            packages.append(self.package_factory.create_from_object(PackageId.SEND_FILE, cmd))
 
-        if packages:
+        if blocks:
             logger.info("Sending " + str(len(packages)) + " Block(s) to the client")
         else:
             logger.warning("No Blocks found for file '" + hashcode + "'")
+
+        hashcode = blocks[0].hash
+        index_all = blocks[0].index_all
+        filename = blocks[0].filename
+
+        for block in blocks:
+            cmd = Block.no_previous(hashcode, index_all, block.ordinal, block.chunk, filename)
+            packages.append(self.package_factory.create_from_object(PackageId.SEND_FILE, cmd))
 
         return packages
 
@@ -335,7 +339,7 @@ def send(package: Package, sock: socket.socket):
         logger.error("Can't send package. Package size to large!")
 
 
-def handle_get_file(block: BlockCMD) -> List[Package]:
+def handle_get_file(block: Block) -> List[Package]:
     """
     Creates a file for the block if not exists and writes the chunk stored in the block to the file.
 

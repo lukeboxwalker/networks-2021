@@ -19,95 +19,28 @@ from logger import logger
 CHUNK_SIZE = 500
 
 
-class BlockCMD:
-    """
-    Class that represents a Block that was send from a client.
-
-    There is no hash as well as no hash previous because only the server
-    should determine there values in the real stored Block.
-    """
-
-    # Disable too many arguments. Doesnt make much sense to group the variables instead.
-    # pylint: disable=too-many-arguments
-    def __init__(self, hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str):
-        self.__hashcode = hashcode
-        self.__index_all = index_all
-        self.__ordinal = ordinal
-        self.__filename = filename
-        self.__chunk = chunk
-
-    @property
-    def hash(self) -> str:
-        """
-        Property function to ensure that the hash is a read only variable.
-        :return: the hash value of the file as a string.
-        """
-        return self.__hashcode
-
-    @property
-    def index_all(self) -> int:
-        """
-        Property function to ensure that the number of Blocks is a read only variable.
-
-        :return: the number of Blocks that represent the file as an integer.
-        """
-        return self.__index_all
-
-    @property
-    def ordinal(self) -> int:
-        """
-        Property function to ensure that the ordinal is a read only variable.
-        If there are n blocks that represent a file, the ordinal value of a single block
-        is between 0 and n - 1.
-
-        :return: the ordinal of this block as an integer.
-        """
-        return self.__ordinal
-
-    @property
-    def chunk(self) -> bytes:
-        """
-        Property function to ensure that the chunk of data is a read only variable.
-        The byte data is stored as a Block.BUF_SIZE large chunk in the each Block.
-
-        :return: the chunk of data as bytes.
-        """
-        return self.__chunk
-
-    @property
-    def filename(self) -> str:
-        """
-        Property function to ensure that the filename is a read only variable.
-        :return: the filename of the file as a string.
-        """
-        return self.__filename
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Block):
-            return False
-        return (self.hash == other.hash and
-                self.index_all == other.index_all and
-                self.ordinal == other.ordinal and
-                self.chunk == other.chunk and
-                self.filename == other.filename)
-
-    def __hash__(self) -> int:
-        values = frozenset((self.hash, self.index_all, self.ordinal, self.chunk, self.__filename))
-        return hash(values)
-
-
 class Block:
     """
     Class that represents a Block in a BlockChain.
     """
 
-    def __init__(self, hash_previous: str, block_cmd: BlockCMD):
-        self.__hashcode = block_cmd.hash
-        self.__index_all = block_cmd.index_all
-        self.__ordinal = block_cmd.ordinal
-        self.__filename = block_cmd.filename
-        self.__chunk = block_cmd.chunk
-        self.__hash_previous = hash_previous
+    def __init__(self, **kwargs):
+        self.__hashcode = kwargs.get("hash")
+        self.__index_all = kwargs.get("index_all")
+        self.__ordinal = kwargs.get("ordinal")
+        self.__filename = kwargs.get("filename")
+        self.__chunk = kwargs.get("chunk")
+        self.__hash_previous = kwargs.get("hash_previous")
+
+    @staticmethod
+    def no_previous(hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str):
+        return Block(hash=hashcode, index_all=index_all, ordinal=ordinal,
+                     filename=filename, chunk=chunk, hash_previous=None)
+
+    @staticmethod
+    def set_previous(hash_previous: str, block):
+        return Block(hash=block.hash, index_all=block.index_all, ordinal=block.ordinal,
+                     filename=block.filename, chunk=block.chunk, hash_previous=hash_previous)
 
     @property
     def hash(self) -> str:
@@ -174,7 +107,7 @@ class Block:
                 self.filename == other.filename)
 
     def __hash__(self) -> int:
-        values = frozenset((self.hash, self.index_all, self.ordinal, self.chunk, self.__filename))
+        values = frozenset((self.hash, self.index_all, self.ordinal, self.chunk, self.filename))
         return hash(values)
 
 
@@ -230,13 +163,13 @@ class BlockChain:
 
     def size(self):
         """
-        Gets the size of the BlockChain.
+        Get the size of the BlockChain.
 
         :return size of the chain.
         """
         return self.__chain.size()
 
-    def add(self, block_cmd: BlockCMD) -> str:
+    def add(self, new_block: Block) -> str:
         """
         Adds a new Block to the BlockChain.
         Method performs a thread safe action on the BlockChain by acquiring a lock.
@@ -244,13 +177,13 @@ class BlockChain:
         Creates a new section of Blocks for a new file or add a Block to an existing
         Block section in the BlockChain.
 
-        :param block_cmd: the block to insert into the BlockChain.
+        :param new_block: the block to insert into the BlockChain.
         :raise DuplicateBlockError: if block already exists.
         """
 
         with self.__lock:  # ensures atomic operation
             head = self.__chain.get_head()  # thread safe get_head() is using a lock
-            new_block = Block(head, block_cmd)
+            new_block = Block.set_previous(head, new_block)
 
             block = self.__chain.get(head)
             while block is not None:
@@ -267,10 +200,13 @@ class BlockChain:
         """
         Gets the Blocks from the BlockChain with given hashcode.
         Method performs a thread safe action on the BlockChain no explicit locking needed.
+        Sorts the blocks by there ordinal values.
 
         :return: list of Blocks for the given file hash. List is empty if the hash does not exist.
         """
-        return self.__get_blocks_for_file(hashcode)
+        blocks = self.__get_blocks_for_file(hashcode)
+        blocks.sort(key=lambda x: x.ordinal)
+        return blocks
 
 
 class MemoryDictionary:
@@ -517,7 +453,7 @@ def generate_file_hash(blocks: List) -> str:
     return sha256.hexdigest()
 
 
-def load_file(filepath: str) -> List[BlockCMD]:
+def load_file(filepath: str) -> List[Block]:
     """
     Reading a file and converts it to a Block list by reading the file chunk by chunk.
 
@@ -542,5 +478,5 @@ def load_file(filepath: str) -> List[BlockCMD]:
 
     blocks = []
     for ordinal, chunk in enumerate(chunks):
-        blocks.append(BlockCMD(hashcode, index_all, ordinal, chunk, filename))
+        blocks.append(Block.no_previous(hashcode, index_all, ordinal, chunk, filename))
     return blocks
