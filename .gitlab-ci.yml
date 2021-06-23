@@ -17,4 +17,4 @@ pylint:
 pytest:
   stage: Test
   script:
-  - cd test/;PYTHONPATH ../src python -m unittest *_test.py
+  - cd test/;PYTHONPATH=../src python -m unittest *_test.py
