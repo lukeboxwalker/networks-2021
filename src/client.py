@@ -19,7 +19,7 @@ class Terminal:
         self.client.connect()
         commands = {
             "add": self.add_file,  # adding a new file
-            "check": self.check_file,  # check if a file exists
+            "check": self.check,  # check if a file exists
             "get": self.get_file,  # getting a file back
         }
 
@@ -49,15 +49,18 @@ class Terminal:
         else:
             self.client.add_file(command[1])
 
-    def check_file(self, command: List[str]):
+    def check(self, command: List[str]):
         """
         Checks if a file exists on the server.
 
         :param command: command that contains the hash or file to check.
         """
         if len(command) != 2:
-            logger.error("Command '" + command[0] +
-                         "' needs one second argument the filepath or file hash!")
+            if len(command) == 1:
+                self.client.full_check()
+            else:
+                logger.error("Command '" + command[
+                    0] + "' needs one second argument the filepath or file hash!")
         else:
             if os.path.isfile(command[1]):
                 self.client.check_file(command[1])

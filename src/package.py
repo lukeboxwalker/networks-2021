@@ -28,7 +28,7 @@ class PackageId(IntEnum):
     LOG_TEXT = 0x00  # send/receive text to console log
     SEND_FILE = 0x01  # send/receive blocks of a file
     HASH_CHECK = 0x02  # send/receive hash to check
-    FILE_CHECK = 0x03  # send/receive blocks of a file to check
+    FULL_CHECK = 0x03  # checks the blockchain
     GET_FILE = 0x04  # send/receive hash to get blocks of a file
 
 
@@ -80,7 +80,7 @@ class Package:
 
         :return: the payload object.
         """
-        return pickle.loads(self.__payload)
+        return None if self.__payload == b'' else pickle.loads(self.__payload)
 
 
 class PackageFactory:
@@ -152,7 +152,7 @@ class PackageFactory:
         if not self.packages_ids.__contains__(package_id):
             raise PackageCreationError("Package ID " + str(package_id) + "invalid!")
 
-        return Package(self.package_mode, package_id, pickle.dumps(data))
+        return Package(self.package_mode, package_id, pickle.dumps(data) if data else b'')
 
 
 class PackageHandler:
@@ -162,7 +162,7 @@ class PackageHandler:
 
     def __init__(self, package_mode: PackageMode, package_factory: PackageFactory):
         self.__package_mode = package_mode
-        self.__handlers: Dict[int, Callable[[object], List[Package]]] = dict()
+        self.__handlers: Dict[int, Callable] = dict()
         self.__package_factory = package_factory
 
     def install(self, package_id: int, handler: Callable):
@@ -203,4 +203,7 @@ class PackageHandler:
 
         # calling the installed handler for the package.
         handler = self.__handlers.get(package.package_id)
-        return handler(package.get_object())
+        data = package.get_object()
+        if data:
+            return handler(data)
+        return handler()

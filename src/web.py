@@ -143,6 +143,13 @@ class Client:
         else:
             logger.error("The file '" + filepath + "' does not exist!")
 
+    def full_check(self):
+        """
+        Checks the full blockchain.
+        """
+        package = self.package_factory.create_from_object(PackageId.FULL_CHECK, None)
+        send(package, self.sock)
+
     @staticmethod
     def handle_get_file(block: Block) -> List[Package]:
         """
@@ -184,7 +191,7 @@ class Server:
         # install package handlers for incoming packages
         self.package_handler.install(PackageId.SEND_FILE, self.handle_add_block)
         self.package_handler.install(PackageId.HASH_CHECK, self.handle_check_hash)
-        # self.package_handler.install(PackageId.FILE_CHECK, self.handle_check_file)
+        self.package_handler.install(PackageId.FULL_CHECK, self.handle_full_check)
         self.package_handler.install(PackageId.GET_FILE, self.handle_request_file)
 
     def __handle_client(self, sock: socket.socket, addr: Tuple):
@@ -256,7 +263,7 @@ class Server:
         :return: package to send back to the client.
         """
 
-        exists, num = self.block_chain.file_exists(hashcode)
+        exists, num = self.block_chain.check_hash(hashcode)
         if exists:
             message = "File with hash '" + hashcode + "' is stored in the BlockChain " \
                                                       "as a total of " + str(num) + " Block(s)"
@@ -312,6 +319,21 @@ class Server:
             packages.append(self.package_factory.create_from_object(PackageId.SEND_FILE, cmd))
 
         return packages
+
+    def handle_full_check(self):
+        """
+        Handling full check of the blockchain.
+
+        :return: package to send back to the client.
+        """
+        valid, num_files = self.block_chain.check()
+        if valid:
+            message = "All '" + str(num_files) + "' file(s) stored in the blockchain are complete"
+            return [self.package_factory.create_log_package(LogLevel.INFO, message)]
+
+        message = "Not every file in the blockchain is complete. Total files stored '" + str(
+            num_files) + "'"
+        return [self.package_factory.create_log_package(LogLevel.WARNING, message)]
 
 
 def read(package_handler: PackageHandler, sock: socket.socket) -> bool:

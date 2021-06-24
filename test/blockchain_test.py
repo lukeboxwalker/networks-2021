@@ -14,7 +14,7 @@ class BlockChainTest(unittest.TestCase):
 
         self.assertEqual(block_chain.size(), 0)  # initial length of blockchain should be 0
         self.assertEqual(block_chain.get(hashcode), [])  # should not contain any blocks
-        self.assertEqual(block_chain.file_exists(hashcode), (False, 0))  # should not exits
+        self.assertEqual(block_chain.check_hash(hashcode), (False, 0))  # should not exits
 
     def test_add_blocks(self):
         block_chain = BlockChain(in_memory=True)
@@ -29,7 +29,7 @@ class BlockChainTest(unittest.TestCase):
         self.assertEqual(block_chain.size(), len(original_blocks))
 
         # should exits and be equal
-        self.assertEqual(block_chain.file_exists(hashcode), (True, len(original_blocks)))
+        self.assertEqual(block_chain.check_hash(hashcode), (True, len(original_blocks)))
         self.assertEqual(original_blocks, block_chain.get(hashcode))
 
     def test_add_same_blocks_twice(self):
@@ -47,7 +47,7 @@ class BlockChainTest(unittest.TestCase):
         self.assertEqual(block_chain.size(), len(blocks))
 
         # should exits and be equal
-        self.assertEqual(block_chain.file_exists(hashcode), (True, len(blocks)))
+        self.assertEqual(block_chain.check_hash(hashcode), (True, len(blocks)))
         self.assertEqual(blocks, block_chain.get(hashcode))
 
     def test_concurrent_add_same_file(self):
@@ -76,7 +76,7 @@ class BlockChainTest(unittest.TestCase):
         self.assertEqual(block_chain.size(), len(blocks))
 
         # should exits and be equal
-        self.assertEqual(block_chain.file_exists(hashcode), (True, len(blocks)))
+        self.assertEqual(block_chain.check_hash(hashcode), (True, len(blocks)))
         self.assertEqual(blocks, block_chain.get(hashcode))
 
 

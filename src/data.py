@@ -9,7 +9,7 @@ import threading
 import zlib
 
 from os import path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Set
 from exceptions import DuplicateBlockError, BlockSectionInconsistentError
 
 # Chunk size for the data a single Block is holding.
@@ -125,7 +125,7 @@ class BlockChain:
         self.__chain = MemoryDictionary() if in_memory else FileDictionary()
         self.__lock = threading.Lock()  # lock to ensures adding as an atomic operation
 
-    def __get_blocks_for_file(self, hashcode: str) -> List[Block]:
+    def __get_blocks_for_hash(self, hashcode: str) -> List[Block]:
         """
         Collects all blocks that correspond to the given file hash.
         Method performs a thread safe action on the BlockChain no explicit locking needed.
@@ -149,7 +149,7 @@ class BlockChain:
             block = self.__chain.get(block.hash_previous)  # thread safe block can only be read
         return blocks
 
-    def file_exists(self, hashcode: str) -> Tuple[bool, int]:
+    def check_hash(self, hashcode: str) -> Tuple[bool, int]:
         """
         Checks if the given hash representing a file exists in the BlockChain.
         Method performs a thread safe action on the BlockChain no explicit locking needed.
@@ -158,11 +158,32 @@ class BlockChain:
         :return: if the blocks for the file hash exists and how many block are stored for that file.
         """
 
-        blocks = self.__get_blocks_for_file(hashcode)
+        blocks = self.__get_blocks_for_hash(hashcode)
         try:
             return generate_file_hash(blocks) == hashcode, len(blocks)
         except BlockSectionInconsistentError:
             return False, 0
+
+    def check(self) -> Tuple[bool, int]:
+        """
+        Checks the full blockchain.
+
+        :return: if blockchain is valid and how many files are stored
+        """
+        file_hashes: Set[str] = set()
+        head = self.__chain.get_head()
+        if head is None:
+            return True, 0
+        block = self.__chain.get(head)
+        while block is not None:
+            file_hashes.add(block.hash)
+            block = self.__chain.get(block.hash_previous)
+
+        chain_valid = True
+        for hashcode in file_hashes:
+            valid, _ = self.check_hash(hashcode)
+            chain_valid &= valid
+        return chain_valid, len(file_hashes)
 
     def size(self):
         """
@@ -207,7 +228,7 @@ class BlockChain:
 
         :return: list of Blocks for the given file hash. List is empty if the hash does not exist.
         """
-        blocks = self.__get_blocks_for_file(hashcode)
+        blocks = self.__get_blocks_for_hash(hashcode)
         blocks.sort(key=lambda x: x.ordinal)
         return blocks
 
