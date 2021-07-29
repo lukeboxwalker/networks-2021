@@ -161,7 +161,7 @@ class Client:
         logger.load(block.ordinal + 1, block.index_all)
 
         # write to file in binary mode
-        with open("test" + block.filename, "ab") as file:
+        with open(block.filename, "ab") as file:
             file.write(block.chunk)
 
         return []
