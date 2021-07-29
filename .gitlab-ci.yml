@@ -12,7 +12,7 @@ pylint:
   stage: Static Analysis
   script:
   - pip install pylint
-  - pylint src/
+  - pylint
 
 unittest:
   stage: Test

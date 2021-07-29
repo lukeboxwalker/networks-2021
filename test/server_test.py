@@ -1,3 +1,6 @@
+"""
+Test client server communication.
+"""
 import time
 import unittest
 
@@ -5,10 +8,16 @@ from web import Server, Client
 
 
 class ServerTest(unittest.TestCase):
+    """
+    Test client server communication.
+    """
     ip = "localhost"
     port = 0
 
     def test_add_and_check_file(self):
+        """
+        Test to add and check a file from client to server.
+        """
         server = Server(self.ip, self.port)
         server.start()
 

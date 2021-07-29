@@ -44,6 +44,8 @@ class BlockChainTest(unittest.TestCase):
         self.assertEqual(block_chain.check_hash(hashcode), (True, len(original_blocks)))
         self.assertEqual(original_blocks, block_chain.get(hashcode))
 
+    # Loop is used to check if expected errors are raised
+    # pylint: disable=cell-var-from-loop
     def test_add_same_blocks_twice(self):
         """
         Tests that a block cant be added twice.

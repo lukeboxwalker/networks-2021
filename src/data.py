@@ -29,7 +29,7 @@ class Block:
     # pylint: disable=too-many-arguments
     def __init__(self, hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str,
                  hash_previous=None):
-        self.__hashcode = hashcode  # stored as a sha256 string
+        self.__hashcode = hashcode  # stored as a sha256 string not as int for consistency
         self.__index_all = index_all
         self.__ordinal = ordinal
         self.__filename = filename
