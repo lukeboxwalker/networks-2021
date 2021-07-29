@@ -29,12 +29,12 @@ class Block:
     # pylint: disable=too-many-arguments
     def __init__(self, hashcode: str, index_all: int, ordinal: int, chunk: bytes, filename: str,
                  hash_previous=None):
-        self.__hashcode = hashcode
+        self.__hashcode = hashcode  # stored as a sha256 string
         self.__index_all = index_all
         self.__ordinal = ordinal
         self.__filename = filename
         self.__chunk = chunk
-        self.__hash_previous = hash_previous
+        self.__hash_previous = hash_previous  # stored as a sha256 string
 
     @staticmethod
     def set_previous(hash_previous: str, block):

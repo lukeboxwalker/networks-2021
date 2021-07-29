@@ -173,12 +173,13 @@ class Server:
     and handles new incoming client connections, that operate on the BlockChain.
     """
 
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: int, in_memory=True):
         self.address = (host, port)
-        self.block_chain = BlockChain()
+        self.block_chain = BlockChain(in_memory=in_memory)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.sock.bind(self.address)
+        self.address = self.sock.getsockname()
 
         self.thread = None
         self.stopped = threading.Event()
@@ -237,17 +238,12 @@ class Server:
         name = "ServerThread"
         self.thread = Thread(target=self.__start, args=(), name=name)
         self.thread.start()
-        try:
-            input()
-        except KeyboardInterrupt:
-            pass
-        logger.info("KeyboardInterrupt start server shutdown")
-        self.stop()
 
     def stop(self):
         """
         Stops the server if it is running and joins the server thread until it is finished.
         """
+        logger.info("Start server shutdown")
         if self.thread and self.thread.is_alive():
             self.stopped.set()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)

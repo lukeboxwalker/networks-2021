@@ -17,3 +17,8 @@ if __name__ == '__main__':
     # start server
     server = Server(args.ip, args.port)
     server.start()
+    try:
+        input()
+    except KeyboardInterrupt:
+        pass
+    server.stop()
