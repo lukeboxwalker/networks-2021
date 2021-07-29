@@ -344,8 +344,10 @@ def read(package_handler: PackageHandler, sock: socket.socket) -> bool:
     :return: if client closed the connection.
     """
     try:
+        print("test read")
         buf = sock.recv(MAX_PACKAGE_SIZE)
         if not buf:
+            print("test empty")
             return True
         package_size = int.from_bytes(buf, byteorder="big")
         byte_package = sock.recv(package_size)
@@ -357,6 +359,7 @@ def read(package_handler: PackageHandler, sock: socket.socket) -> bool:
             for package in out_packages:
                 send(package, sock)
     except socket.error:
+        print("test error")
         return True
     return False
 
