@@ -4,6 +4,7 @@ Module that holds the classes and functions needed for the client server communi
 import os
 import socket
 import threading
+import signal
 from threading import Thread
 
 from contextlib import closing
@@ -94,6 +95,7 @@ class Client:
         Closes the socket.
         """
         self.sock.close()
+        os.kill(os.getpid(), signal.SIGINT)
 
     def get_file(self, hashcode: str):
         """
