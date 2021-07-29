@@ -19,12 +19,3 @@ unittest:
   stage: Test
   script:
   - cd test/;PYTHONPATH=../src python -m unittest *_test.py
-
-pyinstaller:
-  stage: Deploy
-  script:
-  - pip install pyinstaller
-  - pyinstaller -F src/server.py
-  artifacts:
-    paths:
-      - ./dist/*.exe
