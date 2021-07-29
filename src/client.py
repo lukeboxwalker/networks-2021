@@ -29,6 +29,9 @@ class Terminal:
             "get": self.get_file,  # getting a file back
         }
 
+        if not self.client.running():
+            return
+
         # Client main loop. Waiting for user commands
         while self.client.running():
             try:
