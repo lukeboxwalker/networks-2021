@@ -28,7 +28,6 @@ class Client:
         self.port = port
 
         self.thread = None
-        self.stopped = threading.Event()
 
         # create PackageFactory in SERVER_MODE (creates packages that only a serer accepts)
         # create PackageHandler in CLIENT_MODE (can only handle packages directed to a client)
@@ -75,15 +74,10 @@ class Client:
         """
 
         logger.info("Starting listener")
-        while not self.stopped.isSet():
+        while True:
             if read(self.package_handler, self.sock):
+                logger.info("Connection closed")
                 return
-
-        if self.stopped.isSet():
-            logger.info("Lost connection")
-            os.kill(os.getpid(), signal.SIGINT)
-        else:
-            logger.info("Connection closed")
 
     def connect(self):
         """
@@ -100,7 +94,6 @@ class Client:
         """
         Closes the socket.
         """
-        self.stopped.set()
         self.sock.close()
 
     def get_file(self, hashcode: str):
