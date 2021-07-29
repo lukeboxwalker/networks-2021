@@ -281,9 +281,14 @@ class Server:
         try:
             hashcode = self.block_chain.add(block)
             logger.info("Added block with hash '" + hashcode + "' from file '" + block.filename)
+            res = self.block_chain.check_hash(block.hash)
+            if res[0]:
+                message = "All " + str(res[1]) + " Block(s) with hash '" + hashcode \
+                          + "' from file '" + block.filename + "' were added to the Blockchain!"
+                return [self.package_factory.create_log_package(LogLevel.INFO, message)]
             return []
         except DuplicateBlockError as error:
-            logger.error("Error while adding Blocks to the BlockChain: " + str(error))
+            logger.warning("Error while adding Blocks to the BlockChain: " + str(error))
         return []
 
     def handle_request_file(self, hashcode: str) -> [Package]:
@@ -324,11 +329,16 @@ class Server:
         """
         valid, num_files = self.block_chain.check()
         if valid:
-            message = "All '" + str(num_files) + "' file(s) stored in the blockchain are complete"
+            message = "All '" + str(
+                num_files) + "' file(s) stored in the blockchain are complete and consistent"
             return [self.package_factory.create_log_package(LogLevel.INFO, message)]
 
+        if num_files == 0:
+            message = "Blockchain in an inconsistent state!"
+            return [self.package_factory.create_log_package(LogLevel.ERROR, message)]
+
         message = "Not every file in the blockchain is complete. Total files stored '" + str(
-            num_files) + "'"
+            num_files) + "' Blockchain is consistent"
         return [self.package_factory.create_log_package(LogLevel.WARNING, message)]
 
 

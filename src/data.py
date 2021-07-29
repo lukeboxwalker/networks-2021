@@ -140,13 +140,17 @@ class BlockChain:
         blocks = []
 
         while block is not None:
+            if hash_block(block) != head:
+                break
+
             if block.hash == hashcode:
                 blocks.append(block)
 
                 if block.index_all == len(blocks):
                     break
 
-            block = self.__chain.get(block.hash_previous)  # thread safe block can only be read
+            head = block.hash_previous
+            block = self.__chain.get(head)  # thread safe block can only be read
         return blocks
 
     def check_hash(self, hashcode: str) -> Tuple[bool, int]:
@@ -176,8 +180,15 @@ class BlockChain:
             return True, 0
         block = self.__chain.get(head)
         while block is not None:
+            if hash_block(block) != head:
+                return False, 0
+
             file_hashes.add(block.hash)
+            head = block.hash_previous
             block = self.__chain.get(block.hash_previous)
+
+        if head is not None:
+            return False, 0
 
         chain_valid = True
         for hashcode in file_hashes:
