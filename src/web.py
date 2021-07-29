@@ -2,7 +2,6 @@
 Module that holds the classes and functions needed for the client server communication.
 """
 import os
-import signal
 import socket
 import threading
 from threading import Thread
