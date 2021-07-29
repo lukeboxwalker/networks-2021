@@ -82,23 +82,6 @@ class Logger:
         """
         self.__format_print(message, LogLevel.INFO)
 
-    def load(self, iteration, total, decimals=1):
-        """
-        Creates a loading bar. Print it to the console.
-
-        :param iteration: the current position of the bar
-        :param total: the total amount of the bar
-        :param decimals: decimal places
-        """
-        percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-        filled_length = int(50 * iteration // total)
-        tiles = '█' * filled_length + '_' * (50 - filled_length)
-        text = f'\r{self.__prefix(LogLevel.INFO) + "Progress"} |{tiles}| {percent}% {"Complete"}'
-        if iteration == total:
-            print(text)
-        else:
-            print(text, end="\r")
-
     def warning(self, message):
         """
         Logs a message with log level WARNING to the console.

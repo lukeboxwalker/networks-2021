@@ -62,7 +62,6 @@ class Client:
         for i in range(length):
             package = self.package_factory.create_from_object(package_id, blocks[i])
             send(package, self.sock)
-            logger.load(i + 1, length)
         logger.info(
             "Done sending " + str(len(blocks)) + " Block(s) file hash: '" + blocks[0].hash + "'")
 
@@ -151,7 +150,6 @@ class Client:
 
         :param block: the block to write to the file.
         """
-        logger.load(block.ordinal + 1, block.index_all)
 
         # write to file in binary mode
         with open(block.filename, "ab") as file:
