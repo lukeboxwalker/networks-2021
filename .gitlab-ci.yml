@@ -12,7 +12,8 @@ pylint:
   stage: Static Analysis
   script:
   - pip install pylint
-  - pylint
+  - pylint ./src
+  - PYTHONPATH=../src pylint ./test
 
 unittest:
   stage: Test
