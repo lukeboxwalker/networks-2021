@@ -21,16 +21,12 @@ class Terminal:
             self.client.connect()
         except socket.error:
             logger.error("No connection found!")
-            self.client.close()
             return
         commands = {
             "add": self.add_file,  # adding a new file
             "check": self.check,  # check if a file exists
             "get": self.get_file,  # getting a file back
         }
-
-        if not self.client.running():
-            return
 
         # Client main loop. Waiting for user commands
         while self.client.running():
