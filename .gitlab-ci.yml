@@ -13,7 +13,6 @@ pylint:
   script:
   - pip install pylint
   - pylint ./src
-  - PYTHONPATH=../src pylint ./test
 
 unittest:
   stage: Test
