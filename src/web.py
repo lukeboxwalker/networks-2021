@@ -220,7 +220,6 @@ class Server:
             self.clients.append(sock)
             if self.stopped.isSet():
                 for client in self.clients:
-                    client.shutdown(0)
                     client.close()
                 logger.info("Shutdown server...")
                 self.sock.close()
