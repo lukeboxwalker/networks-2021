@@ -88,6 +88,14 @@ class Client:
         self.thread = Thread(target=self.__connect, args=(), name="ClientThread")
         self.thread.start()
 
+    def running(self):
+        """
+        Checks if socket is running
+
+        :return: if client is running
+        """
+        return self.thread.is_alive()
+
     def close(self):
         """
         Closes the socket.
@@ -165,12 +173,11 @@ class Server:
     """
 
     def __init__(self, host: str, port: int, in_memory=True):
-        self.address = (host, port)
         self.block_chain = BlockChain(in_memory=in_memory)
+        self.clients = []
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        self.sock.bind(self.address)
-        self.address = self.sock.getsockname()
+        self.sock.bind((host, port))
 
         self.thread = None
         self.stopped = threading.Event()
@@ -204,14 +211,16 @@ class Server:
 
         logger.info("Starting server...")
         self.sock.listen()
-        host = self.address[0]
-        port = self.address[1]
+        host = self.sock.getsockname()[0]
+        port = self.sock.getsockname()[1]
         logger.info("Server started listening to " + host + ":" + str(port))
 
         while True:
             sock, addr = self.sock.accept()
+            self.clients.append(sock)
             if self.stopped.isSet():
-                sock.close()
+                for client in self.clients:
+                    client.close()
                 logger.info("Shutdown server...")
                 self.sock.close()
                 break
@@ -239,7 +248,7 @@ class Server:
             self.stopped.set()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
             with closing(sock):
-                sock.connect(self.address)
+                sock.connect(self.sock.getsockname())
 
     def handle_check_hash(self, hashcode: str) -> [Package]:
         """

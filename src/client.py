@@ -30,7 +30,7 @@ class Terminal:
         }
 
         # Client main loop. Waiting for user commands
-        while True:
+        while self.client.running():
             try:
                 text: str = input()
                 command: List[str] = text.split(" ")
