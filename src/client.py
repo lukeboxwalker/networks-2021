@@ -3,6 +3,7 @@ Module to start client.
 """
 import argparse
 import os
+import socket
 from typing import List
 
 from logger import logger
@@ -16,7 +17,12 @@ class Terminal:
 
     def __init__(self, ip: str, port: int):
         self.client = Client(ip, port)
-        self.client.connect()
+        try:
+            self.client.connect()
+        except socket.error:
+            logger.error("No connection found!")
+            self.client.close()
+            return
         commands = {
             "add": self.add_file,  # adding a new file
             "check": self.check,  # check if a file exists
@@ -30,6 +36,15 @@ class Terminal:
                 command: List[str] = text.split(" ")
                 if command[0] == "stop":
                     break
+                if command[0] == "help":
+                    print("\n"
+                          "stop                 | closes the client\n"
+                          "help                 | returns this help page\n"
+                          "add <file>           | sends the file to the server\n"
+                          "check <file or hash> | checks if the file is stored in the Blockchain\n"
+                          "check                | checks the consistency of the Blockchain\n"
+                          "get <hash>           | loads the file stored for the hash\n")
+                    continue
                 if not commands.__contains__(command[0]):
                     logger.warning("Invalid command type 'help' for help!")
                 else:
