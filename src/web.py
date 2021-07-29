@@ -174,7 +174,7 @@ class Server:
 
     def __init__(self, host: str, port: int, in_memory=True):
         self.block_chain = BlockChain(in_memory=in_memory)
-        self.clients = []
+        self.clients = set()
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.sock.bind((host, port))
@@ -217,10 +217,14 @@ class Server:
 
         while True:
             sock, addr = self.sock.accept()
-            self.clients.append(sock)
+            self.clients.add(sock)
             if self.stopped.isSet():
-                for client in self.clients:
-                    client.close()
+                for client_sock in self.clients:
+                    try:
+                        client_sock.shutdown(0)
+                        client_sock.close()
+                    except socket.error:
+                        pass
                 logger.info("Shutdown server...")
                 self.sock.close()
                 break
