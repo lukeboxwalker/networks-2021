@@ -97,7 +97,7 @@ class Logger:
         if iteration == total:
             print(text)
         else:
-            print(text, end="")
+            print(text, end="\r")
 
     def warning(self, message):
         """
