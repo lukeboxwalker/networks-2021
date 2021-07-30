@@ -23,7 +23,7 @@ class Terminal:
             logger.error("No connection found!")
             return
         commands = {
-            "add": self.add_file,  # adding a new file
+            "sent": self.add_file,  # adding a new file
             "check": self.check,  # check if a file exists
             "get": self.get_file,  # getting a file back
         }
@@ -39,7 +39,7 @@ class Terminal:
                     print("\n"
                           "stop                 | closes the client\n"
                           "help                 | returns this help page\n"
-                          "add <file>           | sends the file to the server\n"
+                          "sent <file>           | sends the file to the server\n"
                           "check <file or hash> | checks if the file is stored in the Blockchain\n"
                           "check                | checks the consistency of the Blockchain\n"
                           "get <hash>           | loads the file stored for the hash\n")

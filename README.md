@@ -41,7 +41,7 @@ Befehle:
 |---	|---	|
 | stop | Beendet den Client |
 | help | Gibt diese Hilfe aus |
-| add \<file> | Sendet die Datei in Blöcken zerteilt an den Server |
+| sent \<file> | Sendet die Datei in Blöcken zerteilt an den Server |
 | check \<file or hash> | Überprüft ob die Datei schon auf der Blockchain gespeichert ist | 
 | check | Überprüft die gesamte Blockchain |
 | get \<hash> | Lädt die Datei des zugehörigen hashes vom Server herunter |
