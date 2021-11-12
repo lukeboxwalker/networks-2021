@@ -60,7 +60,7 @@ class Logger:
 
         name = log_level.name + spaces(7, log_level.name)
         thread = threading.current_thread().name + spaces(15, threading.current_thread().name)
-        return "{} [{}] [{}]  ".format(ctime, name, thread)
+        return f"{ctime} [{name}] [{thread}]  "
 
     def __format_print(self, msg: str, log_level: LogLevel):
         print(self.__prefix(log_level) + msg)

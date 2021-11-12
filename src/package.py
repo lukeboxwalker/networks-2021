@@ -162,7 +162,7 @@ class PackageHandler:
 
     def __init__(self, package_mode: PackageMode, package_factory: PackageFactory):
         self.__package_mode = package_mode
-        self.__handlers: Dict[int, Callable] = dict()
+        self.__handlers: Dict[int, Callable] = {}
         self.__package_factory = package_factory
 
     def install(self, package_id: int, handler: Callable):

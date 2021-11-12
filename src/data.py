@@ -251,7 +251,7 @@ class MemoryDictionary:
 
     def __init__(self):
         self.__head_lock = threading.Lock()  # lock to ensures read write head is thread safe
-        self.__map: Dict[str, Block] = dict()
+        self.__map: Dict[str, Block] = {}
         self.__head = None
 
     def get_head(self):
@@ -379,7 +379,7 @@ class FileDictionary:
         with self.__head_lock:
             if not path.isfile(self.head):
                 return None
-            with open(self.head, "r") as file:
+            with open(self.head, "r", encoding="utf-8") as file:
                 return file.readline()
 
     def update_head(self, hashcode: str):
@@ -389,7 +389,7 @@ class FileDictionary:
         :param hashcode: hash to update head with.
         """
         with self.__head_lock:
-            with open(self.head, "w") as file:
+            with open(self.head, "w", encoding="utf-8") as file:
                 file.write(hashcode)
 
     def contains(self, block: Block) -> bool:
