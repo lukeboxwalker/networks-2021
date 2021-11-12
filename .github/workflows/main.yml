@@ -9,17 +9,22 @@ on:
   workflow_dispatch:
 
 jobs:
-
   pylint:
     runs-on: ubuntu-latest
-    container: python:3.7
     steps:
-      - name: Static Analysis
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+      - name: Install dependencies
         run: |
           python --version
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
           pip install pylint
-          pylint ./src
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Static Analysis
+        run : pylint ./src       
 
   unittest:
     runs-on: ubuntu-latest
