@@ -1,0 +1,32 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+
+  workflow_dispatch:
+
+jobs:
+
+  pylint:
+    runs-on: ubuntu-latest
+    container: python:3.7
+    steps:
+      - name: Static Analysis
+        run: |
+          python --version
+          pip install -r requirements.txt
+          pip install pylint
+          pylint ./src
+
+  unittest:
+    runs-on: ubuntu-latest
+    container: python:3.7
+    steps:
+      - name: Test
+        run: |
+          python --version
+          pip install -r requirements.txt
+          cd test/;PYTHONPATH=../src python -m unittest *_test.py
