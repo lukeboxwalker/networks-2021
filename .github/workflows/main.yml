@@ -28,10 +28,17 @@ jobs:
 
   unittest:
     runs-on: ubuntu-latest
-    container: python:3.7
     steps:
-      - name: Test
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+      - name: Install dependencies
         run: |
           python --version
-          pip install -r requirements.txt
-          cd test/;PYTHONPATH=../src python -m unittest *_test.py
+          python -m pip install --upgrade pip
+          pip install pylint
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Test
+        run : cd test/;PYTHONPATH=../src python -m unittest *_test.py 
