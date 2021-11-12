@@ -1,3 +1,5 @@
+![example workflow](https://github.com/lukeboxwalker/networks-2021/actions/workflows/main.yml/badge.svg)
+
 # Netzwerkprogrammierung SS-2021
 Python Projekt im Modul Netzwerkprogrammierung SS-2021. Das Projekt beinhalten eine eigene 
 Interpretation eines Blockchain Servers, mit dazugehörigem Client. Clients lesen Dateien 
