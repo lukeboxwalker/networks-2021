@@ -1,4 +1,10 @@
-![example workflow](https://github.com/lukeboxwalker/networks-2021/actions/workflows/main.yml/badge.svg)
+
+<a href="https://github.com/lukeboxwalker/networks-2021/actions">![example workflow](https://github.com/lukeboxwalker/networks-2021/actions/workflows/main.yml/badge.svg)</a>
+<a href="https://app.codecov.io/gh/lukeboxwalker/networks-2021">![coverage](https://img.shields.io/codecov/c/github/lukeboxwalker/networks-2021)</a>
+![language](https://img.shields.io/github/languages/top/lukeboxwalker/networks-2021)
+<a href="https://www.python.org/downloads/release/python-370/">![version](https://img.shields.io/badge/python-v3.7-blue)</a>
+<a href="https://github.com/lukeboxwalker/networks-2021/commits/master">![commit](https://img.shields.io/github/last-commit/lukeboxwalker/networks-2021)</a>
+
 
 # Netzwerkprogrammierung SS-2021
 Python Projekt im Modul Netzwerkprogrammierung SS-2021. Das Projekt beinhalten eine eigene 
