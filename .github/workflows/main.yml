@@ -39,4 +39,8 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Test
-        run : cd test/;PYTHONPATH=../src python -m unittest *_test.py 
+        run : cd test/;PYTHONPATH=../src coverage run -m unittest *_test.py
+      - name: Upload coverage to Codecov
+          uses: codecov/codecov-action@v2
+          with:
+            fail_ci_if_error: true
